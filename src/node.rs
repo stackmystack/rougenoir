@@ -3,12 +3,14 @@ use std::ptr::NonNull;
 use super::{Color, Node, NodePtr, NodePtrExt};
 
 // Public API.
-impl Node {
-    pub(crate) fn new() -> Self {
+impl<K, V> Node<K, V> {
+    pub(crate) fn new(key: K, value: V) -> Self {
         Node {
             parent_color: 0,
             right: None,
             left: None,
+            key,
+            value,
         }
     }
 
@@ -37,7 +39,7 @@ impl Node {
         }
     }
 
-    pub(crate) fn left_deepest_node(&self) -> NodePtr {
+    pub(crate) fn left_deepest_node(&self) -> NodePtr<K, V> {
         let mut node = self;
         while let Some(next) = node.left.or(node.right) {
             node = unsafe { next.as_ref() };
@@ -45,7 +47,7 @@ impl Node {
         Some(node.into())
     }
 
-    pub(crate) fn next(&self) -> NodePtr {
+    pub(crate) fn next(&self) -> NodePtr<K, V> {
         /*
          * If we have a right-hand child, go down and then left as far
          * as we can.
@@ -74,13 +76,13 @@ impl Node {
     }
 
     #[inline(always)]
-    pub(crate) fn parent(&self) -> NodePtr {
-        NonNull::new((self.parent_color & !3) as *mut Node)
+    pub(crate) fn parent(&self) -> NodePtr<K, V> {
+        NonNull::new((self.parent_color & !3) as *mut Node<K, V>)
     }
 
     #[inline(always)]
-    pub(crate) fn from_color(parent_color: usize) -> NodePtr {
-        NonNull::new((parent_color & !3) as *mut Node)
+    pub(crate) fn from_color(parent_color: usize) -> NodePtr<K, V> {
+        NonNull::new((parent_color & !3) as *mut Node<K, V>)
     }
 
     #[inline(always)]
@@ -88,7 +90,7 @@ impl Node {
         Color::from(parent_color & 1)
     }
 
-    pub(crate) fn prev(&self) -> NodePtr {
+    pub(crate) fn prev(&self) -> NodePtr<K, V> {
         /*
          * If we have a left-hand child, go down and then right as far
          * as we can.
@@ -116,23 +118,23 @@ impl Node {
 
     /// This is technically [`Self::parent()`] but doesn't reset the color bit.
     #[inline(always)]
-    pub(crate) fn red_parent(&self) -> NodePtr {
-        NonNull::new(self.parent_color as *mut Node)
+    pub(crate) fn red_parent(&self) -> NodePtr<K, V> {
+        NonNull::new(self.parent_color as *mut Node<K, V>)
     }
 
     #[inline(always)]
-    pub(crate) fn set_parent(&mut self, parent: NodePtr) {
+    pub(crate) fn set_parent(&mut self, parent: NodePtr<K, V>) {
         self.parent_color = self.color() as usize + parent.ptr_value();
     }
 
     #[inline(always)]
-    pub(crate) fn set_parent_and_color(&mut self, parent: NodePtr, color: Color) {
+    pub(crate) fn set_parent_and_color(&mut self, parent: NodePtr<K, V>, color: Color) {
         self.parent_color = color as usize + parent.ptr_value();
     }
 }
 
 // Internal API.
-impl Node {
+impl<K, V> Node<K, V> {
     #[inline(always)]
     fn clean(&mut self) {
         self.parent_color = self as *const _ as usize;
@@ -145,7 +147,7 @@ impl Node {
         self.parent_color += Color::Black as usize;
     }
 
-    fn next_postorder(&self) -> NodePtr {
+    fn next_postorder(&self) -> NodePtr<K, V> {
         let parent = unsafe { self.parent()?.as_ref() };
         if let (Some(left), Some(right)) = (parent.left, parent.right) {
             /* If we're sitting on node, we've already seen our children */

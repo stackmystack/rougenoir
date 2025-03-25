@@ -2,19 +2,19 @@ use std::ptr::NonNull;
 
 use super::{Augmenter, Color, Node, NodePtr, NodePtrExt, Root, RootCached, RootOps, RootOpsCmp};
 
-impl<A: Augmenter + Default> Default for Root<A> {
+impl<K, V, A: Augmenter<Key = K, Value = V> + Default> Default for Root<K, V, A> {
     fn default() -> Self {
         Root::new(A::default())
     }
 }
 
-impl<A: Augmenter + Default> Default for RootCached<A> {
+impl<K, V, A: Augmenter<Key = K, Value = V> + Default> Default for RootCached<K, V, A> {
     fn default() -> Self {
         Self::new(A::default())
     }
 }
 
-impl<A: Augmenter> RootCached<A> {
+impl<K, V, A: Augmenter<Key = K, Value = V>> RootCached<K, V, A> {
     pub fn new(augmented: A) -> Self {
         RootCached {
             root: Root::new(augmented),
@@ -23,7 +23,7 @@ impl<A: Augmenter> RootCached<A> {
     }
 }
 
-impl<A: Augmenter> Root<A> {
+impl<K, V, A: Augmenter<Key = K, Value = V>> Root<K, V, A> {
     pub fn new(augmented: A) -> Self {
         Root {
             root: None,
@@ -31,7 +31,7 @@ impl<A: Augmenter> Root<A> {
         }
     }
 
-    fn change_child(&mut self, old: NodePtr, new: NodePtr, parent: NodePtr) {
+    fn change_child(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, parent: NodePtr<K, V>) {
         if let Some(mut parent) = parent {
             let parent = unsafe { parent.as_mut() };
             if parent.left == old {
@@ -48,7 +48,7 @@ impl<A: Augmenter> Root<A> {
     /// - old's parent and color get assigned to new
     /// - old gets assigned new as a parent and 'color' as a color.
     #[inline]
-    fn rotate_set_parents(&mut self, old: NodePtr, new: NodePtr, color: Color) {
+    fn rotate_set_parents(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, color: Color) {
         let old = unsafe { old.unwrap().as_mut() };
         let parent = old.parent();
         unsafe { new.unwrap().as_mut() }.parent_color = old.parent_color;
@@ -57,7 +57,7 @@ impl<A: Augmenter> Root<A> {
     }
 
     #[inline]
-    fn erase_augmented(&mut self, node: NonNull<Node>) -> NodePtr {
+    fn erase_augmented(&mut self, node: NonNull<Node<K, V>>) -> NodePtr<K, V> {
         let node = unsafe { node.as_ref() };
         let mut child = node.right;
         let mut tmp = node.left;
@@ -79,7 +79,7 @@ impl<A: Augmenter> Root<A> {
             rebalance = if child.is_some() {
                 child.set_parent_color(pc);
                 None
-            } else if Node::parent_color(pc) == Color::Black {
+            } else if Node::<K, V>::parent_color(pc) == Color::Black {
                 parent
             } else {
                 None
@@ -169,7 +169,7 @@ impl<A: Augmenter> Root<A> {
     /// Inline version for rb_erase() use - we want to be able to inline
     /// and eliminate the [`DummyAugmenter::rotate`] callback there
     #[inline]
-    fn erase_color(&mut self, mut parent: NodePtr) {
+    fn erase_color(&mut self, mut parent: NodePtr<K, V>) {
         let mut node = None;
         let mut sibling = None;
         let mut tmp1 = None;
@@ -338,8 +338,11 @@ impl<A: Augmenter> Root<A> {
     }
 }
 
-impl<A: Augmenter> RootOps for Root<A> {
-    fn first(&self) -> NodePtr {
+impl<K, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K, V, A> {
+    type Key = K;
+    type Value = V;
+
+    fn first(&self) -> NodePtr<Self::Key, Self::Value> {
         let mut n = self.root?;
         while let Some(left) = unsafe { n.as_ref() }.left {
             n = left;
@@ -347,12 +350,12 @@ impl<A: Augmenter> RootOps for Root<A> {
         Some(n)
     }
 
-    fn first_postorder(&self) -> NodePtr {
+    fn first_postorder(&self) -> NodePtr<Self::Key, Self::Value> {
         let n = self.root?;
         unsafe { n.as_ref() }.left_deepest_node()
     }
 
-    fn last(&self) -> NodePtr {
+    fn last(&self) -> NodePtr<Self::Key, Self::Value> {
         let mut n = self.root?;
         while let Some(right) = unsafe { n.as_ref() }.right {
             n = right;
@@ -360,8 +363,12 @@ impl<A: Augmenter> RootOps for Root<A> {
         Some(n)
     }
 
-    fn replace_node(&mut self, mut victim: NonNull<Node>, new: NonNull<Node>) {
-        let new: NodePtr = new.into();
+    fn replace_node(
+        &mut self,
+        mut victim: NonNull<Node<Self::Key, Self::Value>>,
+        new: NonNull<Node<Self::Key, Self::Value>>,
+    ) {
+        let new: NodePtr<Self::Key, Self::Value> = new.into();
         let parent = unsafe { victim.as_ref() }.parent();
         {
             let victim = unsafe { victim.as_mut() };
@@ -371,15 +378,15 @@ impl<A: Augmenter> RootOps for Root<A> {
         self.change_child(victim.into(), new, parent);
     }
 
-    fn erase(&mut self, node: NonNull<Node>) {
+    fn erase(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
         let rebalance = self.erase_augmented(node);
         if rebalance.is_some() {
             self.erase_color(rebalance);
         }
     }
 
-    fn insert(&mut self, node: NonNull<Node>) {
-        let mut node: NodePtr = node.into();
+    fn insert(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
+        let mut node: NodePtr<Self::Key, Self::Value> = node.into();
         let mut parent = node.red_parent();
         let mut gparent = None;
         let mut tmp = None;
@@ -514,32 +521,39 @@ impl<A: Augmenter> RootOps for Root<A> {
     }
 }
 
-impl<A: Augmenter> RootOps for RootCached<A> {
-    fn first(&self) -> NodePtr {
+impl<K, V, A: Augmenter<Key = K, Value = V>> RootOps for RootCached<K, V, A> {
+    type Key = K;
+    type Value = V;
+
+    fn first(&self) -> NodePtr<Self::Key, Self::Value> {
         self.leftmost
     }
 
-    fn last(&self) -> NodePtr {
+    fn last(&self) -> NodePtr<Self::Key, Self::Value> {
         self.root.last()
     }
 
-    fn first_postorder(&self) -> NodePtr {
+    fn first_postorder(&self) -> NodePtr<Self::Key, Self::Value> {
         self.root.first_postorder()
     }
 
-    fn replace_node(&mut self, victim: NonNull<Node>, new: NonNull<Node>) {
+    fn replace_node(
+        &mut self,
+        victim: NonNull<Node<Self::Key, Self::Value>>,
+        new: NonNull<Node<Self::Key, Self::Value>>,
+    ) {
         if self.leftmost == victim.into() {
             self.leftmost = new.into();
         }
         self.root.replace_node(victim, new);
     }
 
-    fn insert(&mut self, node: NonNull<Node>) {
+    fn insert(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
         self.leftmost = node.into();
         self.root.insert(node);
     }
 
-    fn erase(&mut self, node: NonNull<Node>) {
+    fn erase(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
         if self.leftmost == node.into() {
             self.leftmost = unsafe { node.as_ref() }.next();
         }
