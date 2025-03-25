@@ -234,8 +234,3 @@ pub struct RootCached<K, V, A: Augmenter> {
     root: Root<K, V, A>,
     leftmost: NodePtr<K, V>,
 }
-
-//pub type RBTree = Root<DummyAugmenter>;
-//pub type RBTreeCached = RootCached<DummyAugmenter>;
-//pub type RBTreeAugmented<A> = Root<A>;
-//pub type RBTreeCachedAugmented<A> = RootCached<A>;
