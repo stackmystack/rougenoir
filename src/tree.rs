@@ -36,7 +36,7 @@ pub trait TreeOps {
     fn last(&self) -> Option<&Self::Value>;
     fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
     fn len(&self) -> usize;
-    // fn pop_first(&mut self) -> Option<(&Self::Key, &Self::Value)>;
+    fn pop_first(&mut self) -> Option<(Self::Key, Self::Value)>;
     // fn pop_last(&mut self) -> Option<(&Self::Key, &Self::Value)>;
     // fn remove(&mut self, key: Self::Key, value: Self::Value);
     // fn retain<F>(&mut self, f: F)
@@ -166,6 +166,14 @@ impl<R: RootOps> TreeOps for Tree<R> {
     fn len(&self) -> usize {
         self.len
     }
+
+    fn pop_first(&mut self) -> Option<(Self::Key, Self::Value)> {
+        let first_node = self.root.first()?;
+        self.root.erase(first_node);
+        let first_node = unsafe { Box::from_raw(first_node.as_ptr()) };
+        self.len -= 1;
+        Some((first_node.key, first_node.value))
+    }
 }
 
 #[cfg(test)]
@@ -246,5 +254,47 @@ mod test {
         res = tree.insert(42, "42".to_string());
         assert_eq!(Some(forty_two), res);
         assert_eq!(1, tree.len());
+    }
+
+    #[test]
+    fn pop_first() {
+        let mut tree = RBTree::<usize, String>::new();
+
+        let mut res = tree.pop_first();
+        assert_eq!(None, res);
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        res = tree.pop_first();
+        assert_eq!(Some((42, forty_two.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&42));
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        tree.insert(42, forty_two.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(100, hundo.clone());
+
+        res = tree.pop_first();
+        assert_eq!(Some((0, zero.clone())), res);
+        assert_eq!(2, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        res = tree.pop_first();
+        assert_eq!(Some((42, forty_two.clone())), res);
+        assert_eq!(1, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        res = tree.pop_first();
+        assert_eq!(Some((100, hundo.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(false, tree.contains_key(&100));
     }
 }
