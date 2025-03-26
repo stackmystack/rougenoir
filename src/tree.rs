@@ -33,7 +33,7 @@ pub trait TreeOps {
     fn get_key_value(&self, key: &Self::Key) -> Option<(&Self::Key, &Self::Value)>;
     fn insert(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value>;
     // fn keys(&self) -> Keys<'a, K, V>;
-    // fn last(&self) -> Option<&Self::Value>;
+    fn last(&self) -> Option<&Self::Value>;
     // fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
     fn len(&self) -> usize;
     // fn pop_first(&mut self) -> Option<(&Self::Key, &Self::Value)>;
@@ -117,6 +117,10 @@ impl<R: RootOps> TreeOps for Tree<R> {
         None
     }
 
+    fn last(&self) -> Option<&Self::Value> {
+        self.root.last().map(|e| &unsafe { e.as_ref() }.value)
+    }
+
     fn len(&self) -> usize {
         self.len
     }
@@ -131,31 +135,24 @@ mod test {
 
     #[test]
     fn tree_ctor_works() {
-        let tree = Tree::<Root<String, String, DummyAugmenter<String, String>>>::new();
-        assert_eq!(tree.first(), None)
+        let tree = Tree::<Root<usize, String, DummyAugmenter<usize, String>>>::new();
+        assert_eq!(tree.first(), None);
+        assert_eq!(false, tree.contains_key(&42));
     }
 
     #[test]
     fn rbtree_ctor_works() {
-        let tree = RBTree::<String, String>::new();
-        assert_eq!(tree.first(), None)
+        let tree = RBTree::<usize, String>::new();
+        assert_eq!(tree.first(), None);
+        assert_eq!(false, tree.contains_key(&42));
     }
 
     #[test]
-    fn contains() {
-        let mut tree = RBTree::<usize, String>::new();
-        tree.insert(42, "forty two".to_string());
-    }
-
-    #[test]
-    fn insert_same_key() {
-        let mut tree = RBTree::<usize, String>::new();
+    fn contains_many() {
         let forty_two = "forty two".to_string();
-        let mut res = tree.insert(42, forty_two.clone());
+        let mut tree = RBTree::<usize, String>::new();
+        let mut res = tree.insert(42, forty_two);
         assert_eq!(None, res);
-        assert_eq!(1, tree.len());
-        res = tree.insert(42, "42".to_string());
-        assert_eq!(Some(forty_two), res);
         assert_eq!(1, tree.len());
 
         let zero = "zero".to_string();
@@ -172,5 +169,37 @@ mod test {
         assert_eq!(true, tree.contains_key(&100));
         assert_eq!(false, tree.contains_key(&1));
         assert_eq!(false, tree.contains_key(&1000));
+    }
+
+    #[test]
+    fn first_and_last() {
+        let mut tree = RBTree::<usize, String>::new();
+        assert_eq!(None, tree.first());
+        assert_eq!(None, tree.last());
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        assert_eq!(Some(&forty_two), tree.first());
+        assert_eq!(Some(&forty_two), tree.last());
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        tree.insert(0, zero.clone());
+        tree.insert(100, hundo.clone());
+
+        assert_eq!(Some(&zero), tree.first());
+        assert_eq!(Some(&hundo), tree.last());
+    }
+
+    #[test]
+    fn insert_same_key() {
+        let mut tree = RBTree::<usize, String>::new();
+        let forty_two = "forty two".to_string();
+        let mut res = tree.insert(42, forty_two.clone());
+        assert_eq!(None, res);
+        assert_eq!(1, tree.len());
+        res = tree.insert(42, "42".to_string());
+        assert_eq!(Some(forty_two), res);
+        assert_eq!(1, tree.len());
     }
 }
