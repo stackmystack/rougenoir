@@ -47,6 +47,14 @@ impl<K, V> Node<K, V> {
         Some(node.into())
     }
 
+    pub(crate) fn link(&mut self, parent: NonNull<Node<K, V>>, link: &mut NodePtr<K, V>) -> usize {
+        self.parent_color = parent.as_ptr() as usize;
+        self.left = None;
+        self.right = None;
+        *link = Some(self.into());
+        self.parent_color
+    }
+
     pub(crate) fn next(&self) -> NodePtr<K, V> {
         /*
          * If we have a right-hand child, go down and then left as far

@@ -194,9 +194,11 @@ impl<K, V> Augmenter for DummyAugmenter<K, V> {
 }
 
 pub trait RootOps {
-    type Key;
+    type Key: PartialEq + Ord;
     type Value;
 
+    fn root(&self) -> NodePtr<Self::Key, Self::Value>;
+    fn set_root(&mut self, new: NodePtr<Self::Key, Self::Value>);
     fn first(&self) -> NodePtr<Self::Key, Self::Value>;
     fn last(&self) -> NodePtr<Self::Key, Self::Value>;
     fn first_postorder(&self) -> NodePtr<Self::Key, Self::Value>;

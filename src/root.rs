@@ -49,11 +49,13 @@ impl<K, V, A: Augmenter<Key = K, Value = V>> Root<K, V, A> {
     /// - old gets assigned new as a parent and 'color' as a color.
     #[inline]
     fn rotate_set_parents(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, color: Color) {
-        let old = unsafe { old.unwrap().as_mut() };
-        let parent = old.parent();
-        unsafe { new.unwrap().as_mut() }.parent_color = old.parent_color;
-        old.set_parent_and_color(new, color);
-        self.change_child(old.into(), new, parent);
+        if old.is_some() {
+            let old = unsafe { old.unwrap().as_mut() };
+            let parent = old.parent();
+            unsafe { new.unwrap().as_mut() }.parent_color = old.parent_color;
+            old.set_parent_and_color(new, color);
+            self.change_child(old.into(), new, parent);
+        }
     }
 
     #[inline]
@@ -338,10 +340,17 @@ impl<K, V, A: Augmenter<Key = K, Value = V>> Root<K, V, A> {
     }
 }
 
-impl<K, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K, V, A> {
+impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K, V, A> {
     type Key = K;
     type Value = V;
 
+    fn root(&self) -> NodePtr<Self::Key, Self::Value> {
+        self.root
+    }
+
+    fn set_root(&mut self, new: NodePtr<Self::Key, Self::Value>) {
+        self.root = new;
+    }
     fn first(&self) -> NodePtr<Self::Key, Self::Value> {
         let mut n = self.root?;
         while let Some(left) = unsafe { n.as_ref() }.left {
@@ -521,9 +530,17 @@ impl<K, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K, V, A> {
     }
 }
 
-impl<K, V, A: Augmenter<Key = K, Value = V>> RootOps for RootCached<K, V, A> {
+impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for RootCached<K, V, A> {
     type Key = K;
     type Value = V;
+
+    fn root(&self) -> NodePtr<Self::Key, Self::Value> {
+        self.root.root
+    }
+
+    fn set_root(&mut self, new: NodePtr<Self::Key, Self::Value>) {
+        self.root.root = new;
+    }
 
     fn first(&self) -> NodePtr<Self::Key, Self::Value> {
         self.leftmost

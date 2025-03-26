@@ -1,15 +1,19 @@
-use std::marker::PhantomData;
+use std::{cmp::Ordering::*, ptr::NonNull};
 
-use crate::{Augmenter, DummyAugmenter, Node, Root, RootCached, RootOps};
+use crate::{Color, DummyAugmenter, Node, NodePtrExt, Root, RootCached, RootOps};
 
 #[derive(Debug)]
 pub struct Tree<R: RootOps> {
+    len: usize,
     root: R,
 }
 
 impl<R: RootOps + Default> Tree<R> {
     fn new() -> Self {
-        Tree { root: R::default() }
+        Tree {
+            len: 0,
+            root: R::default(),
+        }
     }
 }
 
@@ -22,28 +26,108 @@ pub trait TreeOps {
     type Key;
     type Value;
 
-    // fn delete(&mut self, key: Self::Key, value: Self::Value);
+    fn contains_key(&self, key: &Self::Key) -> bool;
     fn first(&self) -> Option<&Self::Value>;
-    // fn get(&self, key: Self::Key) -> Option<&Self::Value>;
-    // fn insert(&mut self, key: Self::Key, value: Self::Value);
+    fn first_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
+    fn get(&self, key: &Self::Key) -> Option<&Self::Value>;
+    fn get_key_value(&self, key: &Self::Key) -> Option<(&Self::Key, &Self::Value)>;
+    fn insert(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value>;
+    // fn keys(&self) -> Keys<'a, K, V>;
     // fn last(&self) -> Option<&Self::Value>;
+    // fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
+    fn len(&self) -> usize;
+    // fn pop_first(&mut self) -> Option<(&Self::Key, &Self::Value)>;
+    // fn pop_last(&mut self) -> Option<(&Self::Key, &Self::Value)>;
+    // fn remove(&mut self, key: Self::Key, value: Self::Value);
+    // fn retain<F>(&mut self, f: F)
+    // where
+    //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
     // fn update(&mut self, key: &Self::Key, value: Self::Value);
+    // fn values(&self) -> Values<'a, self::key, self::value>;
+    // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
 }
 
 impl<R: RootOps> TreeOps for Tree<R> {
     type Key = R::Key;
     type Value = R::Value;
 
+    fn contains_key(&self, key: &Self::Key) -> bool {
+        self.get_key_value(key).is_some()
+    }
+
     fn first(&self) -> Option<&Self::Value> {
         self.root.first().map(|e| &unsafe { e.as_ref() }.value)
+    }
+
+    fn first_key_value(&self) -> Option<(&Self::Key, &Self::Value)> {
+        self.root.first().map(|e| {
+            let e = unsafe { e.as_ref() };
+            (&e.key, &e.value)
+        })
+    }
+
+    fn get(&self, key: &Self::Key) -> Option<&Self::Value> {
+        self.get_key_value(key).map(|(_, v)| v)
+    }
+
+    fn get_key_value(&self, key: &Self::Key) -> Option<(&Self::Key, &Self::Value)> {
+        let mut node = self.root.root();
+        while let Some(candidate) = node {
+            let candidate = unsafe { candidate.as_ref() };
+            match key.cmp(&candidate.key) {
+                Equal => break,
+                Greater => node = candidate.right,
+                Less => node = candidate.left,
+            }
+        }
+        node.map(|e| {
+            let e = unsafe { e.as_ref() };
+            (&e.key, &e.value)
+        })
+    }
+
+    fn insert(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
+        let mut link = &mut self.root.root();
+        if link.is_none() {
+            let mut node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
+            node.set_parent_color(Color::Black as usize);
+            self.root.set_root(node);
+            self.len += 1;
+            return None;
+        }
+
+        let mut parent = link.unwrap().as_ptr();
+        while let Some(mut candidate) = link.clone() {
+            parent = link.unwrap().as_ptr();
+            let candidate = unsafe { candidate.as_mut() };
+            match key.cmp(&candidate.key) {
+                Equal => {
+                    return Some(std::mem::replace(&mut candidate.value, value));
+                }
+                Greater => link = &mut candidate.right,
+                Less => link = &mut candidate.left,
+            }
+        }
+
+        let mut node = Box::new(Node::new(key, value));
+        node.link(NonNull::new(parent).unwrap(), &mut link);
+        let node = NonNull::new(Box::into_raw(node));
+        self.root.insert(node.expect("cannot be null"));
+        self.len += 1;
+        None
+    }
+
+    fn len(&self) -> usize {
+        self.len
     }
 }
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::DummyAugmenter;
 
-    use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn tree_ctor_works() {
@@ -55,5 +139,38 @@ mod test {
     fn rbtree_ctor_works() {
         let tree = RBTree::<String, String>::new();
         assert_eq!(tree.first(), None)
+    }
+
+    #[test]
+    fn contains() {
+        let mut tree = RBTree::<usize, String>::new();
+        tree.insert(42, "forty two".to_string());
+    }
+
+    #[test]
+    fn insert_same_key() {
+        let mut tree = RBTree::<usize, String>::new();
+        let forty_two = "forty two".to_string();
+        let mut res = tree.insert(42, forty_two.clone());
+        assert_eq!(None, res);
+        assert_eq!(1, tree.len());
+        res = tree.insert(42, "42".to_string());
+        assert_eq!(Some(forty_two), res);
+        assert_eq!(1, tree.len());
+
+        let zero = "zero".to_string();
+        let hando = "hundo".to_string();
+        res = tree.insert(0, zero);
+        assert_eq!(None, res);
+        assert_eq!(2, tree.len());
+        res = tree.insert(100, hando);
+        assert_eq!(None, res);
+        assert_eq!(3, tree.len());
+
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&0));
+        assert_eq!(true, tree.contains_key(&100));
+        assert_eq!(false, tree.contains_key(&1));
+        assert_eq!(false, tree.contains_key(&1000));
     }
 }
