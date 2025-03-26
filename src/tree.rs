@@ -47,6 +47,41 @@ pub trait TreeOps {
     // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
 }
 
+impl<R: RootOps> Drop for Tree<R> {
+    fn drop(&mut self) {
+        enum Direction {
+            Left,
+            Right,
+            None,
+        }
+        let mut parent = self.root.root();
+        let mut direction = Direction::None;
+        while let Some(current) = parent {
+            let current_ref = unsafe { current.as_ref() };
+            if current_ref.left.is_some() {
+                parent = current_ref.left;
+                direction = Direction::Left;
+                continue;
+            }
+            if current_ref.right.is_some() {
+                parent = current_ref.right;
+                direction = Direction::Right;
+                continue;
+            }
+            parent = current_ref.parent();
+            // drop; don't call rbtree erase => needless overhead.
+            if parent.is_some() {
+                match &direction {
+                    Direction::Left => unsafe { parent.unwrap().as_mut() }.left = None,
+                    Direction::Right => unsafe { parent.unwrap().as_mut() }.right = None,
+                    _ => {}
+                }
+            }
+            let _ = unsafe { Box::from_raw(current.as_ptr()) };
+        }
+    }
+}
+
 impl<R: RootOps> TreeOps for Tree<R> {
     type Key = R::Key;
     type Value = R::Value;
