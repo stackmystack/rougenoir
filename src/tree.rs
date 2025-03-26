@@ -34,7 +34,7 @@ pub trait TreeOps {
     fn insert(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value>;
     // fn keys(&self) -> Keys<'a, K, V>;
     fn last(&self) -> Option<&Self::Value>;
-    // fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
+    fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
     fn len(&self) -> usize;
     // fn pop_first(&mut self) -> Option<(&Self::Key, &Self::Value)>;
     // fn pop_last(&mut self) -> Option<(&Self::Key, &Self::Value)>;
@@ -156,6 +156,13 @@ impl<R: RootOps> TreeOps for Tree<R> {
         self.root.last().map(|e| &unsafe { e.as_ref() }.value)
     }
 
+    fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)> {
+        self.root.last().map(|e| {
+            let e = unsafe { e.as_ref() };
+            (&e.key, &e.value)
+        })
+    }
+
     fn len(&self) -> usize {
         self.len
     }
@@ -215,7 +222,8 @@ mod test {
         let forty_two = "forty two".to_string();
         tree.insert(42, forty_two.clone());
         assert_eq!(Some(&forty_two), tree.first());
-        assert_eq!(Some(&forty_two), tree.last());
+        assert_eq!(Some((&42, &forty_two)), tree.first_key_value());
+        assert_eq!(Some((&42, &forty_two)), tree.last_key_value());
 
         let zero = "zero".to_string();
         let hundo = "hundo".to_string();
@@ -223,7 +231,9 @@ mod test {
         tree.insert(100, hundo.clone());
 
         assert_eq!(Some(&zero), tree.first());
+        assert_eq!(Some((&0, &zero)), tree.first_key_value());
         assert_eq!(Some(&hundo), tree.last());
+        assert_eq!(Some((&100, &hundo)), tree.last_key_value());
     }
 
     #[test]
