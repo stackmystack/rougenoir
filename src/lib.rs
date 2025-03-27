@@ -272,7 +272,7 @@ pub trait TreeOps {
     fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
     fn len(&self) -> usize;
     fn pop_first(&mut self) -> Option<(Self::Key, Self::Value)>;
-    // fn pop_last(&mut self) -> Option<(&Self::Key, &Self::Value)>;
+    fn pop_last(&mut self) -> Option<(Self::Key, Self::Value)>;
     // fn remove(&mut self, key: Self::Key, value: Self::Value);
     // fn retain<F>(&mut self, f: F)
     // where
