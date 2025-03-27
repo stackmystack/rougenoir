@@ -1,6 +1,6 @@
 use std::{cmp::Ordering::*, ptr::NonNull};
 
-use crate::{Callbacks, Color, Node, NodePtrExt, RootOps, Tree};
+use crate::{Callbacks, Color, Node, NodePtr, NodePtrExt, RootOps, Tree};
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
@@ -42,7 +42,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     where
         K: Ord,
     {
-        self.get_key_value(key).is_some()
+        self.find_node(key).is_some()
     }
 
     pub fn first(&self) -> Option<&V> {
@@ -50,9 +50,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 
     pub fn first_key_value(&self) -> Option<(&K, &V)> {
-        self.root.first().map(|e| {
-            let e = unsafe { e.as_ref() };
-            (&e.key, &e.value)
+        self.root.first().map(|n| {
+            let n = unsafe { n.as_ref() };
+            (&n.key, &n.value)
         })
     }
 
@@ -60,10 +60,20 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     where
         K: Ord,
     {
-        self.get_key_value(key).map(|(_, v)| v)
+        self.find_node(key).map(|n| &unsafe { n.as_ref() }.value)
     }
 
     pub fn get_key_value(&self, key: &K) -> Option<(&K, &V)>
+    where
+        K: Ord,
+    {
+        self.find_node(key).map(|n| {
+            let n = unsafe { n.as_ref() };
+            (&n.key, &n.value)
+        })
+    }
+
+    fn find_node(&self, key: &K) -> NodePtr<K, V>
     where
         K: Ord,
     {
@@ -76,10 +86,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
                 Less => node = candidate.left,
             }
         }
-        node.map(|e| {
-            let e = unsafe { e.as_ref() };
-            (&e.key, &e.value)
-        })
+        node
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
@@ -120,13 +127,13 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     // fn keys(&self) -> Keys<'a, K, V>;
 
     pub fn last(&self) -> Option<&V> {
-        self.root.last().map(|e| &unsafe { e.as_ref() }.value)
+        self.root.last().map(|n| &unsafe { n.as_ref() }.value)
     }
 
     pub fn last_key_value(&self) -> Option<(&K, &V)> {
-        self.root.last().map(|e| {
-            let e = unsafe { e.as_ref() };
-            (&e.key, &e.value)
+        self.root.last().map(|n| {
+            let n = unsafe { n.as_ref() };
+            (&n.key, &n.value)
         })
     }
 
@@ -148,9 +155,15 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         self.len -= 1;
         Some((first_node.key, first_node.value))
     }
-    // TODO
 
-    // fn remove(&mut self, key: Self::Key, value: Self::Value);
+    pub fn remove(&mut self, key: &K) -> Option<V>
+    where
+        K: Ord,
+    {
+        self.pop_node(self.find_node(key)?).map(|(_, v)| v)
+    }
+
+    // TODO
     // fn retain<F>(&mut self, f: F)
     // where
     //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
@@ -323,6 +336,48 @@ mod test {
 
         res = tree.pop_last();
         assert_eq!(Some((0, zero.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(false, tree.contains_key(&100));
+    }
+
+    #[test]
+    fn remove() {
+        let mut tree = Tree::<usize, String>::new();
+
+        let mut res = tree.remove(&42);
+        assert_eq!(None, res);
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        res = tree.remove(&42);
+        assert_eq!(Some(forty_two.clone()), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&42));
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        tree.insert(42, forty_two.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(100, hundo.clone());
+
+        res = tree.remove(&42);
+        assert_eq!(Some(forty_two.clone()), res);
+        assert_eq!(2, tree.len());
+        assert_eq!(true, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        res = tree.remove(&0);
+        assert_eq!(Some(zero.clone()), res);
+        assert_eq!(1, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        res = tree.remove(&100);
+        assert_eq!(Some(hundo.clone()), res);
         assert_eq!(0, tree.len());
         assert_eq!(false, tree.contains_key(&0));
         assert_eq!(false, tree.contains_key(&42));
