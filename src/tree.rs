@@ -162,8 +162,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Noop, RBTree};
-
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -174,16 +172,9 @@ mod test {
     }
 
     #[test]
-    fn rbtree_ctor_works() {
-        let tree = RBTree::<usize, String>::new();
-        assert_eq!(tree.first(), None);
-        assert_eq!(false, tree.contains_key(&42));
-    }
-
-    #[test]
     fn contains_many() {
         let forty_two = "forty two".to_string();
-        let mut tree = RBTree::<usize, String>::new();
+        let mut tree = Tree::<usize, String>::new();
         let mut res = tree.insert(42, forty_two);
         assert_eq!(None, res);
         assert_eq!(1, tree.len());
@@ -206,7 +197,7 @@ mod test {
 
     #[test]
     fn first_and_last() {
-        let mut tree = RBTree::<usize, String>::new();
+        let mut tree = Tree::<usize, String>::new();
         assert_eq!(None, tree.first());
         assert_eq!(None, tree.last());
 
@@ -230,7 +221,7 @@ mod test {
     #[test]
     fn insert_multiple_values() {
         let data: Vec<(usize, String)> = (0..100).map(|i| (i, format!("{i}"))).collect();
-        let mut tree = RBTree::<usize, String>::new();
+        let mut tree = Tree::<usize, String>::new();
         for (k, v) in data.iter() {
             tree.insert(k.clone(), v.to_string());
         }
@@ -244,7 +235,7 @@ mod test {
 
     #[test]
     fn insert_same_key() {
-        let mut tree = RBTree::<usize, String>::new();
+        let mut tree = Tree::<usize, String>::new();
         let forty_two = "forty two".to_string();
         let mut res = tree.insert(42, forty_two.clone());
         assert_eq!(None, res);
@@ -256,7 +247,7 @@ mod test {
 
     #[test]
     fn pop_first() {
-        let mut tree = RBTree::<usize, String>::new();
+        let mut tree = Tree::<usize, String>::new();
 
         let mut res = tree.pop_first();
         assert_eq!(None, res);
@@ -298,7 +289,7 @@ mod test {
 
     #[test]
     fn pop_last() {
-        let mut tree = RBTree::<usize, String>::new();
+        let mut tree = Tree::<usize, String>::new();
 
         let mut res = tree.pop_last();
         assert_eq!(None, res);

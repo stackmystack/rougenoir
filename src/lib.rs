@@ -249,7 +249,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C>
         Self::with_callbacks(C::default())
     }
 }
-pub type RBTree<K, V> = Tree<K, V, Noop<K, V>>;
+
 // pub type RBTreeCached<K, V> = Tree<RootCached<K, V, DummyAugmenter<K, V>>>;
-pub type RBTreeAugmented<K, V, C> = Tree<K, V, C>;
 // pub type RBTreeCachedAugmented<K, V, A> = Tree<RootCached<K, V, A>>;

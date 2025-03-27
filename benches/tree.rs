@@ -16,7 +16,7 @@ fn insert_rbtree(range: Range<usize>, tree: &mut rbtree::RBTree<usize, ()>) {
     }
 }
 
-fn insert_rougenoir(range: Range<usize>, tree: &mut rougenoir::RBTree<usize, ()>) {
+fn insert_rougenoir(range: Range<usize>, tree: &mut rougenoir::Tree<usize, ()>) {
     for k in range {
         tree.insert(k, ());
     }
@@ -35,7 +35,7 @@ fn bench_insert(c: &mut Criterion) {
             b.iter(|| insert_rbtree(black_box(0..size), black_box(&mut tree)));
         });
         group.bench_with_input(BenchmarkId::new("rougenoir", &size), &size, |b, &size| {
-            let mut tree = rougenoir::RBTree::<usize, ()>::new();
+            let mut tree = rougenoir::Tree::<usize, ()>::new();
             b.iter(|| insert_rougenoir(black_box(0..size), black_box(&mut tree)));
         });
     }
