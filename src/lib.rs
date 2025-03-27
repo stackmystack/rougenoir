@@ -211,73 +211,45 @@ pub trait RootOps {
     fn erase(&mut self, node: NonNull<Node<Self::Key, Self::Value>>);
 }
 
-pub trait RootOpsCmp {
-    type Key;
-    type Value;
-
-    fn add(
-        &mut self,
-        node: NodePtr<Self::Key, Self::Value>,
-        cmp: fn(&Node<Self::Key, Self::Value>, &Node<Self::Key, Self::Value>) -> bool,
-    );
-}
-
 /// A red-black tree root.
 /// T is the type of the data stored in the tree.
 /// A is the Augmented Callback type.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Root<K, V, A: Augmenter> {
+pub struct Root<K, V, A: Augmenter<Key = K, Value = V>> {
     root: NodePtr<K, V>,
     augmented: A,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RootCached<K, V, A: Augmenter> {
-    root: Root<K, V, A>,
-    leftmost: NodePtr<K, V>,
-}
-
 #[derive(Debug)]
-pub struct Tree<R: RootOps> {
+pub struct Tree<K, V, A: Augmenter<Key = K, Value = V>> {
     len: usize,
-    root: R,
+    root: Root<K, V, A>,
 }
 
-impl<R: RootOps + Default> Tree<R> {
-    pub fn new() -> Self {
+impl<K, V, A: Augmenter<Key = K, Value = V>> Tree<K, V, A> {
+    pub fn augmented(augmented: A) -> Self {
         Tree {
             len: 0,
-            root: R::default(),
+            root: Root::new(augmented),
         }
     }
 }
 
-pub type RBTree<K, V> = Tree<Root<K, V, DummyAugmenter<K, V>>>;
-pub type RBTreeCached<K, V> = Tree<RootCached<K, V, DummyAugmenter<K, V>>>;
-pub type RBTreeAugmented<K, V, A> = Tree<Root<K, V, A>>;
-pub type RBTreeCachedAugmented<K, V, A> = Tree<RootCached<K, V, A>>;
-
-pub trait TreeOps {
-    type Key;
-    type Value;
-
-    fn contains_key(&self, key: &Self::Key) -> bool;
-    fn first(&self) -> Option<&Self::Value>;
-    fn first_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
-    fn get(&self, key: &Self::Key) -> Option<&Self::Value>;
-    fn get_key_value(&self, key: &Self::Key) -> Option<(&Self::Key, &Self::Value)>;
-    fn insert(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value>;
-    // fn keys(&self) -> Keys<'a, K, V>;
-    fn last(&self) -> Option<&Self::Value>;
-    fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
-    fn len(&self) -> usize;
-    fn pop_first(&mut self) -> Option<(Self::Key, Self::Value)>;
-    fn pop_last(&mut self) -> Option<(Self::Key, Self::Value)>;
-    // fn remove(&mut self, key: Self::Key, value: Self::Value);
-    // fn retain<F>(&mut self, f: F)
-    // where
-    //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
-    // fn update(&mut self, key: &Self::Key, value: Self::Value);
-    // fn values(&self) -> Values<'a, self::key, self::value>;
-    // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
+impl<K, V> Tree<K, V, DummyAugmenter<K, V>> {
+    pub fn new() -> Self {
+        Tree {
+            len: 0,
+            root: Root::new(DummyAugmenter::new()),
+        }
+    }
 }
+
+impl<K, V, A: Augmenter<Key = K, Value = V> + Default> Default for Tree<K, V, A> {
+    fn default() -> Self {
+        Self::augmented(A::default())
+    }
+}
+pub type RBTree<K, V> = Tree<K, V, DummyAugmenter<K, V>>;
+// pub type RBTreeCached<K, V> = Tree<RootCached<K, V, DummyAugmenter<K, V>>>;
+pub type RBTreeAugmented<K, V, A> = Tree<K, V, A>;
+// pub type RBTreeCachedAugmented<K, V, A> = Tree<RootCached<K, V, A>>;

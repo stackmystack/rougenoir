@@ -1,25 +1,10 @@
 use std::ptr::NonNull;
 
-use super::{Augmenter, Color, Node, NodePtr, NodePtrExt, Root, RootCached, RootOps, RootOpsCmp};
+use super::{Augmenter, Color, Node, NodePtr, NodePtrExt, Root};
 
 impl<K, V, A: Augmenter<Key = K, Value = V> + Default> Default for Root<K, V, A> {
     fn default() -> Self {
         Root::new(A::default())
-    }
-}
-
-impl<K, V, A: Augmenter<Key = K, Value = V> + Default> Default for RootCached<K, V, A> {
-    fn default() -> Self {
-        Self::new(A::default())
-    }
-}
-
-impl<K, V, A: Augmenter<Key = K, Value = V>> RootCached<K, V, A> {
-    pub fn new(augmented: A) -> Self {
-        RootCached {
-            root: Root::new(augmented),
-            leftmost: None,
-        }
     }
 }
 
@@ -340,18 +325,8 @@ impl<K, V, A: Augmenter<Key = K, Value = V>> Root<K, V, A> {
     }
 }
 
-impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K, V, A> {
-    type Key = K;
-    type Value = V;
-
-    fn root(&self) -> NodePtr<Self::Key, Self::Value> {
-        self.root
-    }
-
-    fn set_root(&mut self, new: NodePtr<Self::Key, Self::Value>) {
-        self.root = new;
-    }
-    fn first(&self) -> NodePtr<Self::Key, Self::Value> {
+impl<K, V, A: Augmenter<Key = K, Value = V>> Root<K, V, A> {
+    pub fn first(&self) -> NodePtr<K, V> {
         let mut n = self.root?;
         while let Some(left) = unsafe { n.as_ref() }.left {
             n = left;
@@ -359,12 +334,12 @@ impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K
         Some(n)
     }
 
-    fn first_postorder(&self) -> NodePtr<Self::Key, Self::Value> {
+    pub fn first_postorder(&self) -> NodePtr<K, V> {
         let n = self.root?;
         unsafe { n.as_ref() }.left_deepest_node()
     }
 
-    fn last(&self) -> NodePtr<Self::Key, Self::Value> {
+    pub fn last(&self) -> NodePtr<K, V> {
         let mut n = self.root?;
         while let Some(right) = unsafe { n.as_ref() }.right {
             n = right;
@@ -372,12 +347,8 @@ impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K
         Some(n)
     }
 
-    fn replace_node(
-        &mut self,
-        mut victim: NonNull<Node<Self::Key, Self::Value>>,
-        new: NonNull<Node<Self::Key, Self::Value>>,
-    ) {
-        let new: NodePtr<Self::Key, Self::Value> = new.into();
+    pub fn replace_node(&mut self, mut victim: NonNull<Node<K, V>>, new: NonNull<Node<K, V>>) {
+        let new: NodePtr<K, V> = new.into();
         let parent = unsafe { victim.as_ref() }.parent();
         {
             let victim = unsafe { victim.as_mut() };
@@ -387,15 +358,15 @@ impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K
         self.change_child(victim.into(), new, parent);
     }
 
-    fn erase(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
+    pub fn erase(&mut self, node: NonNull<Node<K, V>>) {
         let rebalance = self.erase_augmented(node);
         if rebalance.is_some() {
             self.erase_color(rebalance);
         }
     }
 
-    fn insert(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
-        let mut node: NodePtr<Self::Key, Self::Value> = node.into();
+    pub fn insert(&mut self, node: NonNull<Node<K, V>>) {
+        let mut node: NodePtr<K, V> = node.into();
         let mut parent = node.red_parent();
         let mut gparent = None;
         let mut tmp = None;
@@ -530,50 +501,50 @@ impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for Root<K
     }
 }
 
-impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for RootCached<K, V, A> {
-    type Key = K;
-    type Value = V;
+// impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for RootCached<K, V, A> {
+//     type Key = K;
+//     type Value = V;
 
-    fn root(&self) -> NodePtr<Self::Key, Self::Value> {
-        self.root.root
-    }
+//     fn root(&self) -> NodePtr<Self::Key, Self::Value> {
+//         self.root.root
+//     }
 
-    fn set_root(&mut self, new: NodePtr<Self::Key, Self::Value>) {
-        self.root.root = new;
-    }
+//     fn set_root(&mut self, new: NodePtr<Self::Key, Self::Value>) {
+//         self.root.root = new;
+//     }
 
-    fn first(&self) -> NodePtr<Self::Key, Self::Value> {
-        self.leftmost
-    }
+//     fn first(&self) -> NodePtr<Self::Key, Self::Value> {
+//         self.leftmost
+//     }
 
-    fn last(&self) -> NodePtr<Self::Key, Self::Value> {
-        self.root.last()
-    }
+//     fn last(&self) -> NodePtr<Self::Key, Self::Value> {
+//         self.root.last()
+//     }
 
-    fn first_postorder(&self) -> NodePtr<Self::Key, Self::Value> {
-        self.root.first_postorder()
-    }
+//     fn first_postorder(&self) -> NodePtr<Self::Key, Self::Value> {
+//         self.root.first_postorder()
+//     }
 
-    fn replace_node(
-        &mut self,
-        victim: NonNull<Node<Self::Key, Self::Value>>,
-        new: NonNull<Node<Self::Key, Self::Value>>,
-    ) {
-        if self.leftmost == victim.into() {
-            self.leftmost = new.into();
-        }
-        self.root.replace_node(victim, new);
-    }
+//     fn replace_node(
+//         &mut self,
+//         victim: NonNull<Node<Self::Key, Self::Value>>,
+//         new: NonNull<Node<Self::Key, Self::Value>>,
+//     ) {
+//         if self.leftmost == victim.into() {
+//             self.leftmost = new.into();
+//         }
+//         self.root.replace_node(victim, new);
+//     }
 
-    fn insert(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
-        self.leftmost = node.into();
-        self.root.insert(node);
-    }
+//     fn insert(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
+//         self.leftmost = node.into();
+//         self.root.insert(node);
+//     }
 
-    fn erase(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
-        if self.leftmost == node.into() {
-            self.leftmost = unsafe { node.as_ref() }.next();
-        }
-        self.root.erase(node);
-    }
-}
+//     fn erase(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
+//         if self.leftmost == node.into() {
+//             self.leftmost = unsafe { node.as_ref() }.next();
+//         }
+//         self.root.erase(node);
+//     }
+// }

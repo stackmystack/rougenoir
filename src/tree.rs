@@ -1,14 +1,14 @@
 use std::{cmp::Ordering::*, ptr::NonNull};
 
-use crate::{Color, Node, NodePtrExt, RootOps, Tree, TreeOps};
+use crate::{Augmenter, Color, Node, NodePtrExt, RootOps, Tree};
 
-impl<R: RootOps> Drop for Tree<R> {
+impl<K, V, A: Augmenter<Key = K, Value = V>> Drop for Tree<K, V, A> {
     fn drop(&mut self) {
         enum Direction {
             Left,
             Right,
         }
-        let mut parent = self.root.root();
+        let mut parent = self.root.root;
         // TODO: allocate once using the tree's depth.
         let mut direction = Vec::new();
         while let Some(current) = parent {
@@ -37,31 +37,37 @@ impl<R: RootOps> Drop for Tree<R> {
     }
 }
 
-impl<R: RootOps> TreeOps for Tree<R> {
-    type Key = R::Key;
-    type Value = R::Value;
-
-    fn contains_key(&self, key: &Self::Key) -> bool {
+impl<K, V, A: Augmenter<Key = K, Value = V>> Tree<K, V, A> {
+    pub fn contains_key(&self, key: &K) -> bool
+    where
+        K: Ord,
+    {
         self.get_key_value(key).is_some()
     }
 
-    fn first(&self) -> Option<&Self::Value> {
+    pub fn first(&self) -> Option<&V> {
         self.root.first().map(|e| &unsafe { e.as_ref() }.value)
     }
 
-    fn first_key_value(&self) -> Option<(&Self::Key, &Self::Value)> {
+    pub fn first_key_value(&self) -> Option<(&K, &V)> {
         self.root.first().map(|e| {
             let e = unsafe { e.as_ref() };
             (&e.key, &e.value)
         })
     }
 
-    fn get(&self, key: &Self::Key) -> Option<&Self::Value> {
+    pub fn get(&self, key: &K) -> Option<&V>
+    where
+        K: Ord,
+    {
         self.get_key_value(key).map(|(_, v)| v)
     }
 
-    fn get_key_value(&self, key: &Self::Key) -> Option<(&Self::Key, &Self::Value)> {
-        let mut node = self.root.root();
+    pub fn get_key_value(&self, key: &K) -> Option<(&K, &V)>
+    where
+        K: Ord,
+    {
+        let mut node = self.root.root;
         while let Some(candidate) = node {
             let candidate = unsafe { candidate.as_ref() };
             match key.cmp(&candidate.key) {
@@ -76,12 +82,15 @@ impl<R: RootOps> TreeOps for Tree<R> {
         })
     }
 
-    fn insert(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
-        let mut link = &mut self.root.root();
+    pub fn insert(&mut self, key: K, value: V) -> Option<V>
+    where
+        K: Ord,
+    {
+        let mut link = &mut self.root.root;
         if link.is_none() {
             let mut node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
             node.set_parent_color(Color::Black as usize);
-            self.root.set_root(node);
+            self.root.root = node;
             self.len += 1;
             return None;
         }
@@ -107,52 +116,59 @@ impl<R: RootOps> TreeOps for Tree<R> {
         None
     }
 
-    fn last(&self) -> Option<&Self::Value> {
+    // TODO
+    // fn keys(&self) -> Keys<'a, K, V>;
+
+    pub fn last(&self) -> Option<&V> {
         self.root.last().map(|e| &unsafe { e.as_ref() }.value)
     }
 
-    fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)> {
+    pub fn last_key_value(&self) -> Option<(&K, &V)> {
         self.root.last().map(|e| {
             let e = unsafe { e.as_ref() };
             (&e.key, &e.value)
         })
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.len
     }
 
-    fn pop_first(&mut self) -> Option<(Self::Key, Self::Value)> {
+    pub fn pop_first(&mut self) -> Option<(K, V)> {
         self.pop_node(self.root.first()?)
     }
 
-    fn pop_last(&mut self) -> Option<(Self::Key, Self::Value)> {
+    pub fn pop_last(&mut self) -> Option<(K, V)> {
         self.pop_node(self.root.last()?)
     }
-}
 
-impl<R: RootOps> Tree<R> {
-    fn pop_node(
-        &mut self,
-        node: NonNull<Node<<R as RootOps>::Key, <R as RootOps>::Value>>,
-    ) -> Option<(<R as RootOps>::Key, <R as RootOps>::Value)> {
+    fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> Option<(K, V)> {
         self.root.erase(node);
         let first_node = unsafe { Box::from_raw(node.as_ptr()) };
         self.len -= 1;
         Some((first_node.key, first_node.value))
     }
+    // TODO
+
+    // fn remove(&mut self, key: Self::Key, value: Self::Value);
+    // fn retain<F>(&mut self, f: F)
+    // where
+    //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
+    // fn update(&mut self, key: &Self::Key, value: Self::Value);
+    // fn values(&self) -> Values<'a, self::key, self::value>;
+    // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{DummyAugmenter, RBTree, Root};
+    use crate::{DummyAugmenter, RBTree};
 
     use pretty_assertions::assert_eq;
 
     #[test]
     fn tree_ctor_works() {
-        let tree = Tree::<Root<usize, String, DummyAugmenter<usize, String>>>::new();
+        let tree = Tree::<usize, String, DummyAugmenter<usize, String>>::new();
         assert_eq!(tree.first(), None);
         assert_eq!(false, tree.contains_key(&42));
     }
