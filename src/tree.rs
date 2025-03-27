@@ -1,6 +1,6 @@
 use std::{cmp::Ordering::*, ptr::NonNull};
 
-use crate::{Callbacks, Color, Node, NodePtr, NodePtrExt, RootOps, Tree};
+use crate::{Callbacks, Color, Node, NodePtr, NodePtrExt, Tree};
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
     fn drop(&mut self) {

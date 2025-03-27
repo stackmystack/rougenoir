@@ -193,24 +193,6 @@ impl<K, V> Callbacks for Noop<K, V> {
     }
 }
 
-pub trait RootOps {
-    type Key: PartialEq + Ord;
-    type Value;
-
-    fn root(&self) -> NodePtr<Self::Key, Self::Value>;
-    fn set_root(&mut self, new: NodePtr<Self::Key, Self::Value>);
-    fn first(&self) -> NodePtr<Self::Key, Self::Value>;
-    fn last(&self) -> NodePtr<Self::Key, Self::Value>;
-    fn first_postorder(&self) -> NodePtr<Self::Key, Self::Value>;
-    fn replace_node(
-        &mut self,
-        victim: NonNull<Node<Self::Key, Self::Value>>,
-        new: NonNull<Node<Self::Key, Self::Value>>,
-    );
-    fn insert(&mut self, node: NonNull<Node<Self::Key, Self::Value>>);
-    fn erase(&mut self, node: NonNull<Node<Self::Key, Self::Value>>);
-}
-
 /// A red-black tree root.
 /// T is the type of the data stored in the tree.
 /// A is the Augmented Callback type.
