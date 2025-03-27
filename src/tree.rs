@@ -1,51 +1,6 @@
 use std::{cmp::Ordering::*, ptr::NonNull};
 
-use crate::{Color, DummyAugmenter, Node, NodePtrExt, Root, RootCached, RootOps};
-
-#[derive(Debug)]
-pub struct Tree<R: RootOps> {
-    len: usize,
-    root: R,
-}
-
-impl<R: RootOps + Default> Tree<R> {
-    fn new() -> Self {
-        Tree {
-            len: 0,
-            root: R::default(),
-        }
-    }
-}
-
-pub type RBTree<K, V> = Tree<Root<K, V, DummyAugmenter<K, V>>>;
-pub type RBTreeCached<K, V> = Tree<RootCached<K, V, DummyAugmenter<K, V>>>;
-pub type RBTreeAugmented<K, V, A> = Tree<Root<K, V, A>>;
-pub type RBTreeCachedAugmented<K, V, A> = Tree<RootCached<K, V, A>>;
-
-pub trait TreeOps {
-    type Key;
-    type Value;
-
-    fn contains_key(&self, key: &Self::Key) -> bool;
-    fn first(&self) -> Option<&Self::Value>;
-    fn first_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
-    fn get(&self, key: &Self::Key) -> Option<&Self::Value>;
-    fn get_key_value(&self, key: &Self::Key) -> Option<(&Self::Key, &Self::Value)>;
-    fn insert(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value>;
-    // fn keys(&self) -> Keys<'a, K, V>;
-    fn last(&self) -> Option<&Self::Value>;
-    fn last_key_value(&self) -> Option<(&Self::Key, &Self::Value)>;
-    fn len(&self) -> usize;
-    fn pop_first(&mut self) -> Option<(Self::Key, Self::Value)>;
-    // fn pop_last(&mut self) -> Option<(&Self::Key, &Self::Value)>;
-    // fn remove(&mut self, key: Self::Key, value: Self::Value);
-    // fn retain<F>(&mut self, f: F)
-    // where
-    //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
-    // fn update(&mut self, key: &Self::Key, value: Self::Value);
-    // fn values(&self) -> Values<'a, self::key, self::value>;
-    // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
-}
+use crate::{Color, Node, NodePtrExt, RootOps, Tree, TreeOps};
 
 impl<R: RootOps> Drop for Tree<R> {
     fn drop(&mut self) {
@@ -179,7 +134,7 @@ impl<R: RootOps> TreeOps for Tree<R> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::DummyAugmenter;
+    use crate::{DummyAugmenter, RBTree, Root};
 
     use pretty_assertions::assert_eq;
 
