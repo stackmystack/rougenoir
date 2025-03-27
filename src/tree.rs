@@ -1,8 +1,8 @@
 use std::{cmp::Ordering::*, ptr::NonNull};
 
-use crate::{Augmenter, Color, Node, NodePtrExt, RootOps, Tree};
+use crate::{Callbacks, Color, Node, NodePtrExt, RootOps, Tree};
 
-impl<K, V, A: Augmenter<Key = K, Value = V>> Drop for Tree<K, V, A> {
+impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
         enum Direction {
             Left,
@@ -37,7 +37,7 @@ impl<K, V, A: Augmenter<Key = K, Value = V>> Drop for Tree<K, V, A> {
     }
 }
 
-impl<K, V, A: Augmenter<Key = K, Value = V>> Tree<K, V, A> {
+impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     pub fn contains_key(&self, key: &K) -> bool
     where
         K: Ord,
@@ -162,13 +162,13 @@ impl<K, V, A: Augmenter<Key = K, Value = V>> Tree<K, V, A> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{DummyAugmenter, RBTree};
+    use crate::{Noop, RBTree};
 
     use pretty_assertions::assert_eq;
 
     #[test]
     fn tree_ctor_works() {
-        let tree = Tree::<usize, String, DummyAugmenter<usize, String>>::new();
+        let tree = Tree::<usize, String>::new();
         assert_eq!(tree.first(), None);
         assert_eq!(false, tree.contains_key(&42));
     }

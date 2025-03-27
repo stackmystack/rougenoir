@@ -1,15 +1,15 @@
 use std::ptr::NonNull;
 
-use super::{Augmenter, Color, Node, NodePtr, NodePtrExt, Root};
+use super::{Callbacks, Color, Node, NodePtr, NodePtrExt, Root};
 
-impl<K, V, A: Augmenter<Key = K, Value = V> + Default> Default for Root<K, V, A> {
+impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Root<K, V, C> {
     fn default() -> Self {
-        Root::new(A::default())
+        Root::new(C::default())
     }
 }
 
-impl<K, V, A: Augmenter<Key = K, Value = V>> Root<K, V, A> {
-    pub fn new(augmented: A) -> Self {
+impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
+    pub fn new(augmented: C) -> Self {
         Root {
             root: None,
             augmented,
@@ -325,7 +325,7 @@ impl<K, V, A: Augmenter<Key = K, Value = V>> Root<K, V, A> {
     }
 }
 
-impl<K, V, A: Augmenter<Key = K, Value = V>> Root<K, V, A> {
+impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     pub fn first(&self) -> NodePtr<K, V> {
         let mut n = self.root?;
         while let Some(left) = unsafe { n.as_ref() }.left {

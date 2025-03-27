@@ -145,7 +145,7 @@ pub struct Node<K, V> {
     value: V,
 }
 
-pub trait Augmenter {
+pub trait Callbacks {
     type Key;
     type Value;
 
@@ -158,27 +158,27 @@ pub trait Augmenter {
     fn rotate(&self, old: NodePtr<Self::Key, Self::Value>, new: NodePtr<Self::Key, Self::Value>);
 }
 
-pub struct DummyAugmenter<K, V> {
+pub struct Noop<K, V> {
     _phantom_k: PhantomData<K>,
     _phantom_v: PhantomData<V>,
 }
 
-impl<K, V> Default for DummyAugmenter<K, V> {
+impl<K, V> Default for Noop<K, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<K, V> DummyAugmenter<K, V> {
+impl<K, V> Noop<K, V> {
     pub fn new() -> Self {
-        DummyAugmenter {
+        Noop {
             _phantom_k: PhantomData::default(),
             _phantom_v: PhantomData::default(),
         }
     }
 }
 
-impl<K, V> Augmenter for DummyAugmenter<K, V> {
+impl<K, V> Callbacks for Noop<K, V> {
     type Key = K;
     type Value = V;
 
@@ -215,19 +215,19 @@ pub trait RootOps {
 /// T is the type of the data stored in the tree.
 /// A is the Augmented Callback type.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Root<K, V, A: Augmenter<Key = K, Value = V>> {
+pub struct Root<K, V, C: Callbacks<Key = K, Value = V> = Noop<K, V>> {
     root: NodePtr<K, V>,
-    augmented: A,
+    augmented: C,
 }
 
 #[derive(Debug)]
-pub struct Tree<K, V, A: Augmenter<Key = K, Value = V>> {
+pub struct Tree<K, V, C: Callbacks<Key = K, Value = V> = Noop<K, V>> {
     len: usize,
-    root: Root<K, V, A>,
+    root: Root<K, V, C>,
 }
 
-impl<K, V, A: Augmenter<Key = K, Value = V>> Tree<K, V, A> {
-    pub fn augmented(augmented: A) -> Self {
+impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+    pub fn with_callbacks(augmented: C) -> Self {
         Tree {
             len: 0,
             root: Root::new(augmented),
@@ -235,21 +235,21 @@ impl<K, V, A: Augmenter<Key = K, Value = V>> Tree<K, V, A> {
     }
 }
 
-impl<K, V> Tree<K, V, DummyAugmenter<K, V>> {
+impl<K, V> Tree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
         Tree {
             len: 0,
-            root: Root::new(DummyAugmenter::new()),
+            root: Root::new(Noop::new()),
         }
     }
 }
 
-impl<K, V, A: Augmenter<Key = K, Value = V> + Default> Default for Tree<K, V, A> {
+impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C> {
     fn default() -> Self {
-        Self::augmented(A::default())
+        Self::with_callbacks(C::default())
     }
 }
-pub type RBTree<K, V> = Tree<K, V, DummyAugmenter<K, V>>;
+pub type RBTree<K, V> = Tree<K, V, Noop<K, V>>;
 // pub type RBTreeCached<K, V> = Tree<RootCached<K, V, DummyAugmenter<K, V>>>;
-pub type RBTreeAugmented<K, V, A> = Tree<K, V, A>;
+pub type RBTreeAugmented<K, V, C> = Tree<K, V, C>;
 // pub type RBTreeCachedAugmented<K, V, A> = Tree<RootCached<K, V, A>>;
