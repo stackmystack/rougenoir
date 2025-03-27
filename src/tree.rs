@@ -142,25 +142,25 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 
     pub fn pop_first(&mut self) -> Option<(K, V)> {
-        self.pop_node(self.root.first()?)
+        Some(self.pop_node(self.root.first()?))
     }
 
     pub fn pop_last(&mut self) -> Option<(K, V)> {
-        self.pop_node(self.root.last()?)
+        Some(self.pop_node(self.root.last()?))
     }
 
-    fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> Option<(K, V)> {
+    fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> (K, V) {
         self.root.erase(node);
         let first_node = unsafe { Box::from_raw(node.as_ptr()) };
         self.len -= 1;
-        Some((first_node.key, first_node.value))
+        (first_node.key, first_node.value)
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V>
     where
         K: Ord,
     {
-        self.pop_node(self.find_node(key)?).map(|(_, v)| v)
+        Some(self.pop_node(self.find_node(key)?).1)
     }
 
     // TODO
