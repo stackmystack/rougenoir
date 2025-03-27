@@ -244,7 +244,7 @@ pub struct Tree<R: RootOps> {
 }
 
 impl<R: RootOps + Default> Tree<R> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Tree {
             len: 0,
             root: R::default(),

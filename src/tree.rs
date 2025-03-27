@@ -7,28 +7,28 @@ impl<R: RootOps> Drop for Tree<R> {
         enum Direction {
             Left,
             Right,
-            None,
         }
         let mut parent = self.root.root();
-        let mut direction = Direction::None;
+        // TODO: allocate once using the tree's depth.
+        let mut direction = Vec::new();
         while let Some(current) = parent {
             let current_ref = unsafe { current.as_ref() };
             if current_ref.left.is_some() {
                 parent = current_ref.left;
-                direction = Direction::Left;
+                direction.push(Direction::Left);
                 continue;
             }
             if current_ref.right.is_some() {
                 parent = current_ref.right;
-                direction = Direction::Right;
+                direction.push(Direction::Right);
                 continue;
             }
             parent = current_ref.parent();
             // drop; don't call rbtree erase => needless overhead.
             if parent.is_some() {
-                match &direction {
-                    Direction::Left => unsafe { parent.unwrap().as_mut() }.left = None,
-                    Direction::Right => unsafe { parent.unwrap().as_mut() }.right = None,
+                match direction.pop() {
+                    Some(Direction::Left) => unsafe { parent.unwrap().as_mut() }.left = None,
+                    Some(Direction::Right) => unsafe { parent.unwrap().as_mut() }.right = None,
                     _ => {}
                 }
             }
@@ -197,6 +197,21 @@ mod test {
         assert_eq!(Some((&0, &zero)), tree.first_key_value());
         assert_eq!(Some(&hundo), tree.last());
         assert_eq!(Some((&100, &hundo)), tree.last_key_value());
+    }
+
+    #[test]
+    fn insert_multiple_values() {
+        let data: Vec<(usize, String)> = (0..100).map(|i| (i, format!("{i}"))).collect();
+        let mut tree = RBTree::<usize, String>::new();
+        for (k, v) in data.iter() {
+            tree.insert(k.clone(), v.to_string());
+        }
+
+        assert_eq!(data.len(), tree.len());
+        for (k, v) in data.iter() {
+            assert_eq!(true, tree.contains_key(k));
+            assert_eq!(Some((k, v)), tree.get_key_value(k));
+        }
     }
 
     #[test]
