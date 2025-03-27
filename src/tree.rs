@@ -9,8 +9,10 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
             Right,
         }
         let mut parent = self.root.root;
-        // TODO: allocate once using the tree's depth.
         let mut direction = Vec::new();
+        // max depth = 2 × log₂(n+1)
+        let log_val = (self.len + 1).checked_ilog2().unwrap_or(0) as usize;
+        direction.reserve(log_val.checked_mul(2).unwrap_or(usize::MAX).max(4096));
         while let Some(current) = parent {
             let current_ref = unsafe { current.as_ref() };
             if current_ref.left.is_some() {
