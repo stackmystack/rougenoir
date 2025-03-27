@@ -74,16 +74,17 @@ filter_unconventional = false
 split_commits = false
 # regex for parsing and grouping commits
 commit_parsers = [
-  { message = "!:", group = "<!-- 0 -->Breaking" },
-  { message = "^feat", group = "<!-- 1 -->Features" },
-  { message = "^fix", group = "<!-- 2 -->Bug Fixes" },
-  { message = "^perf", group = "<!-- 3 -->Performance" },
-  { message = "^doc", group = "<!-- 4 -->Documentation" },
-  { message = "^refactor", skip = true },
-  { message = "^test", skip = true },
-  { message = "^style", skip = true },
-  { message = "^chore", skip = true },
-  { message = ".*", group = "<!-- 5 -->Other" },
+    { message = "!:", group = "<!-- 0 -->Breaking" },
+    { message = "^feat", group = "<!-- 1 -->Features" },
+    { message = "^fix", group = "<!-- 2 -->Bug Fixes" },
+    { message = "^perf", group = "<!-- 3 -->Performance" },
+    { message = "^doc", group = "<!-- 4 -->Documentation" },
+    { message = "^bench", skip = true },
+    { message = "^refactor", skip = true },
+    { message = "^test", skip = true },
+    { message = "^style", skip = true },
+    { message = "^chore", skip = true },
+    { message = ".*", group = "<!-- 5 -->Other" },
 ]
 # filter out the commits that are not matched by commit parsers
 filter_commits = true
@@ -95,4 +96,3 @@ sort_commits = "oldest"
 [remote.github]
 owner = "stackmystack"
 repo = "tsdl"
-
