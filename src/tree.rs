@@ -45,6 +45,22 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         self.find_node(key).is_some()
     }
 
+    fn find_node(&self, key: &K) -> NodePtr<K, V>
+    where
+        K: Ord,
+    {
+        let mut node = self.root.root;
+        while let Some(candidate) = node {
+            let candidate = unsafe { candidate.as_ref() };
+            match key.cmp(&candidate.key) {
+                Equal => break,
+                Greater => node = candidate.right,
+                Less => node = candidate.left,
+            }
+        }
+        node
+    }
+
     pub fn first(&self) -> Option<&V> {
         self.root.first().map(|e| &unsafe { e.as_ref() }.value)
     }
@@ -71,22 +87,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
             let n = unsafe { n.as_ref() };
             (&n.key, &n.value)
         })
-    }
-
-    fn find_node(&self, key: &K) -> NodePtr<K, V>
-    where
-        K: Ord,
-    {
-        let mut node = self.root.root;
-        while let Some(candidate) = node {
-            let candidate = unsafe { candidate.as_ref() };
-            match key.cmp(&candidate.key) {
-                Equal => break,
-                Greater => node = candidate.right,
-                Less => node = candidate.left,
-            }
-        }
-        node
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
@@ -167,7 +167,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     // fn retain<F>(&mut self, f: F)
     // where
     //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
-    // fn update(&mut self, key: &Self::Key, value: Self::Value);
     // fn values(&self) -> Values<'a, self::key, self::value>;
     // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
 }

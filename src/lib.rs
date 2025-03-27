@@ -216,8 +216,8 @@ pub trait RootOps {
 /// A is the Augmented Callback type.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Root<K, V, C: Callbacks<Key = K, Value = V> = Noop<K, V>> {
+    callbacks: C,
     root: NodePtr<K, V>,
-    augmented: C,
 }
 
 #[derive(Debug)]

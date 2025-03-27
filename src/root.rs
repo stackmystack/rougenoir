@@ -12,7 +12,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     pub fn new(augmented: C) -> Self {
         Root {
             root: None,
-            augmented,
+            callbacks: augmented,
         }
     }
 
@@ -97,7 +97,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                  */
                 parent = successor;
                 child2 = successor.right();
-                self.augmented.copy(node.into(), successor);
+                self.callbacks.copy(node.into(), successor);
             } else {
                 /*
                  * Case 3: node's successor is leftmost under
@@ -126,8 +126,8 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 successor.set_right(child);
                 child.set_parent(successor);
 
-                self.augmented.copy(node.into(), successor);
-                self.augmented.propagate(parent, successor);
+                self.callbacks.copy(node.into(), successor);
+                self.callbacks.propagate(parent, successor);
             }
 
             tmp = node.left;
@@ -149,7 +149,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
             tmp = successor;
         }
 
-        self.augmented.propagate(tmp, None);
+        self.callbacks.propagate(tmp, None);
         rebalance
     }
 
@@ -186,7 +186,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     sibling.set_left(parent);
                     tmp1.set_parent_and_color(parent, Color::Black);
                     self.rotate_set_parents(tmp1, parent, Color::Red);
-                    self.augmented.rotate(parent, sibling);
+                    self.callbacks.rotate(parent, sibling);
                     sibling = tmp1;
                 }
                 tmp1 = sibling.right();
@@ -249,7 +249,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     sibling.set_left(tmp1);
                     tmp2.set_right(sibling);
                     tmp1.set_parent_and_color(parent, Color::Black);
-                    self.augmented.rotate(sibling, tmp2);
+                    self.callbacks.rotate(sibling, tmp2);
                     tmp1 = sibling;
                     sibling = tmp2;
                 }
@@ -271,7 +271,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 tmp1.set_parent_and_color(parent, Color::Black);
                 tmp2.set_parent_and_color(tmp1, Color::Black);
                 self.rotate_set_parents(parent, sibling, Color::Black);
-                self.augmented.rotate(parent, sibling);
+                self.callbacks.rotate(parent, sibling);
                 break;
             } else {
                 sibling = parent.left();
@@ -282,7 +282,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     sibling.set_right(parent);
                     tmp1.set_parent_and_color(parent, Color::Black);
                     self.rotate_set_parents(parent, sibling, Color::Red);
-                    self.augmented.rotate(parent, sibling);
+                    self.callbacks.rotate(parent, sibling);
                     sibling = tmp1;
                 }
                 tmp1 = sibling.left();
@@ -308,7 +308,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp2.set_left(sibling);
                     parent.set_left(tmp2);
                     tmp1.set_parent_and_color(sibling, Color::Black);
-                    self.augmented.rotate(sibling, tmp2);
+                    self.callbacks.rotate(sibling, tmp2);
                     tmp1 = sibling;
                     sibling = tmp2;
                 }
@@ -319,7 +319,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 tmp1.set_parent_and_color(sibling, Color::Black);
                 tmp2.set_parent(parent);
                 self.rotate_set_parents(parent, sibling, Color::Black);
-                self.augmented.rotate(parent, sibling);
+                self.callbacks.rotate(parent, sibling);
             }
         }
     }
@@ -443,7 +443,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     node.set_left(parent);
                     tmp.set_parent_and_color(parent, Color::Black);
                     parent.set_parent_and_color(node, Color::Red);
-                    self.augmented.rotate(parent, node);
+                    self.callbacks.rotate(parent, node);
                     parent = node;
                     tmp = node.right();
                 }
@@ -462,7 +462,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 parent.set_right(gparent);
                 tmp.set_parent_and_color(gparent, Color::Black);
                 self.rotate_set_parents(gparent, parent, Color::Red);
-                self.augmented.rotate(gparent, parent);
+                self.callbacks.rotate(gparent, parent);
                 break;
             } else {
                 tmp = gparent.left();
@@ -484,7 +484,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     node.set_right(parent);
                     tmp.set_parent_and_color(parent, Color::Black);
                     parent.set_parent_and_color(node, Color::Red);
-                    self.augmented.rotate(parent, node);
+                    self.callbacks.rotate(parent, node);
                     parent = node;
                     tmp = node.left();
                 }
@@ -494,7 +494,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 parent.set_left(gparent);
                 tmp.set_parent_and_color(gparent, Color::Black);
                 self.rotate_set_parents(gparent, parent, Color::Red);
-                self.augmented.rotate(gparent, parent);
+                self.callbacks.rotate(gparent, parent);
                 break;
             }
         }
