@@ -48,8 +48,8 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
         let node = unsafe { node.as_ref() };
         let mut child = node.right;
         let mut tmp = node.left;
-        let mut parent = None;
-        let mut rebalance = None;
+        let mut parent;
+        let rebalance;
         let pc: usize;
 
         if tmp.is_none() {
@@ -82,7 +82,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
             tmp = parent;
         } else {
             let mut successor = child;
-            let mut child2 = None;
+            let mut child2;
 
             tmp = child.left();
             if tmp.is_none() {
@@ -158,9 +158,10 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     #[inline]
     fn erase_color(&mut self, mut parent: NodePtr<K, V>) {
         let mut node = None;
-        let mut sibling = None;
-        let mut tmp1 = None;
-        let mut tmp2 = None;
+        let mut sibling;
+        let mut tmp1;
+        let mut tmp2;
+
         loop {
             /*
              * Loop invariants:
@@ -368,8 +369,8 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     pub fn insert(&mut self, node: NonNull<Node<K, V>>) {
         let mut node: NodePtr<K, V> = node.into();
         let mut parent = node.red_parent();
-        let mut gparent = None;
-        let mut tmp = None;
+        let mut gparent;
+        let mut tmp;
 
         loop {
             /*

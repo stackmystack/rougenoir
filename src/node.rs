@@ -19,12 +19,6 @@ impl<K, V> Node<K, V> {
         Self::parent_color(self.parent_color) == Color::Black
     }
 
-    /// 'empty' nodes are nodes that are known not to be inserted in an rbtree
-    #[inline(always)]
-    pub(crate) fn is_empty(&self) -> bool {
-        self.parent_color == self as *const _ as usize
-    }
-
     #[inline(always)]
     pub(crate) fn is_red(&self) -> bool {
         Self::parent_color(self.parent_color) == Color::Red
@@ -39,6 +33,7 @@ impl<K, V> Node<K, V> {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn left_deepest_node(&self) -> NodePtr<K, V> {
         let mut node = self;
         while let Some(next) = node.left.or(node.right) {
@@ -47,6 +42,7 @@ impl<K, V> Node<K, V> {
         Some(node.into())
     }
 
+    #[inline(always)]
     pub(crate) fn link(&mut self, parent: NonNull<Node<K, V>>, link: &mut NodePtr<K, V>) -> usize {
         self.parent_color = parent.as_ptr() as usize;
         self.left = None;
@@ -55,6 +51,8 @@ impl<K, V> Node<K, V> {
         self.parent_color
     }
 
+    #[inline(always)]
+    #[allow(dead_code)]
     pub(crate) fn next(&self) -> NodePtr<K, V> {
         /*
          * If we have a right-hand child, go down and then left as far
@@ -98,6 +96,8 @@ impl<K, V> Node<K, V> {
         Color::from(parent_color & 1)
     }
 
+    #[inline(always)]
+    #[allow(dead_code)]
     pub(crate) fn prev(&self) -> NodePtr<K, V> {
         /*
          * If we have a left-hand child, go down and then right as far
@@ -139,23 +139,18 @@ impl<K, V> Node<K, V> {
     pub(crate) fn set_parent_and_color(&mut self, parent: NodePtr<K, V>, color: Color) {
         self.parent_color = color as usize + parent.ptr_value();
     }
-}
 
-// Internal API.
-impl<K, V> Node<K, V> {
+    #[allow(dead_code)]
     #[inline(always)]
-    fn clean(&mut self) {
+    pub(crate) fn clean(&mut self) {
         self.parent_color = self as *const _ as usize;
         self.right = None;
         self.left = None;
     }
 
+    #[allow(dead_code)]
     #[inline(always)]
-    fn set_black(&mut self) {
-        self.parent_color += Color::Black as usize;
-    }
-
-    fn next_postorder(&self) -> NodePtr<K, V> {
+    pub(crate) fn next_postorder(&self) -> NodePtr<K, V> {
         let parent = unsafe { self.parent()?.as_ref() };
         if let (Some(left), Some(right)) = (parent.left, parent.right) {
             /* If we're sitting on node, we've already seen our children */
