@@ -36,7 +36,9 @@ pub(crate) trait NodePtrExt {
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
     fn left(&self) -> NodePtr<Self::Key, Self::Value>;
+    fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn parent(&self) -> NodePtr<Self::Key, Self::Value>;
+    fn prev_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn ptr_value(&self) -> usize;
     fn red_parent(&self) -> NodePtr<Self::Key, Self::Value>;
     fn right(&self) -> NodePtr<Self::Key, Self::Value>;
@@ -62,8 +64,18 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
+    fn next_node(&self) -> NodePtr<Self::Key, Self::Value> {
+        self.map(|v| unsafe { v.as_ref() }.next()).flatten()
+    }
+
+    #[inline(always)]
     fn parent(&self) -> NodePtr<Self::Key, Self::Value> {
         self.map_or(None, |v| unsafe { v.as_ref() }.parent())
+    }
+
+    #[inline(always)]
+    fn prev_node(&self) -> NodePtr<Self::Key, Self::Value> {
+        self.map(|v| unsafe { v.as_ref() }.prev()).flatten()
     }
 
     #[inline(always)]
