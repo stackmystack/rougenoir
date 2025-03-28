@@ -1,10 +1,11 @@
-use std::ops::Index;
+use std::{borrow::Borrow, ops::Index};
 
 use crate::{Callbacks, Tree};
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Index<&K> for Tree<K, V, C>
+impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
 where
-    K: Ord,
+    K: Borrow<Q> + Ord,
+    Q: Ord,
 {
     type Output = V;
 
@@ -14,7 +15,7 @@ where
     ///
     /// Panics if the key is not present in the `Tree`.
     #[inline]
-    fn index(&self, key: &K) -> &V {
+    fn index(&self, key: &Q) -> &V {
         self.get(key).expect("no entry found for key")
     }
 }
@@ -27,9 +28,11 @@ mod test {
     #[test]
     fn index_passes() {
         let mut tree = Tree::new();
-        let forty_two = "forty two".to_string();
-        tree.insert(42, forty_two.clone());
-        assert_eq!(forty_two, tree[&42]);
+        let forty_two_str = "forty two";
+        let forty_two = forty_two_str.to_string();
+        tree.insert(forty_two.clone(), forty_two.clone());
+        assert_eq!(forty_two, tree[forty_two_str]);
+        assert_eq!(forty_two, tree[&forty_two]);
     }
 
     #[test]

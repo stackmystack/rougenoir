@@ -1,4 +1,4 @@
-use std::{cmp::Ordering::*, ptr::NonNull};
+use std::{borrow::Borrow, cmp::Ordering::*, ptr::NonNull};
 
 use crate::{Callbacks, Color, Node, NodePtr, NodePtrExt, Tree};
 
@@ -40,21 +40,23 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
 }
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
-    pub fn contains_key(&self, key: &K) -> bool
+    pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
-        K: Ord,
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
     {
         self.find_node(key).is_some()
     }
 
-    fn find_node(&self, key: &K) -> NodePtr<K, V>
+    fn find_node<Q>(&self, key: &Q) -> NodePtr<K, V>
     where
-        K: Ord,
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
     {
         let mut node = self.root.root;
         while let Some(candidate) = node {
             let candidate = unsafe { candidate.as_ref() };
-            match key.cmp(&candidate.key) {
+            match key.cmp(candidate.key.borrow()) {
                 Equal => break,
                 Greater => node = candidate.right,
                 Less => node = candidate.left,
@@ -74,16 +76,18 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         })
     }
 
-    pub fn get(&self, key: &K) -> Option<&V>
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
-        K: Ord,
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
     {
         self.find_node(key).map(|n| &unsafe { n.as_ref() }.value)
     }
 
-    pub fn get_key_value(&self, key: &K) -> Option<(&K, &V)>
+    pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
     where
-        K: Ord,
+        K: Borrow<Q> + Ord,
+        Q: Ord,
     {
         self.find_node(key).map(|n| {
             let n = unsafe { n.as_ref() };
@@ -158,9 +162,10 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         (first_node.key, first_node.value)
     }
 
-    pub fn remove(&mut self, key: &K) -> Option<V>
+    pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
     where
-        K: Ord,
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
     {
         Some(self.pop_node(self.find_node(key)?).1)
     }
