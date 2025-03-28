@@ -228,7 +228,7 @@ mod test {
     #[test]
     fn contains_many() {
         let forty_two = "forty two".to_string();
-        let mut tree = Tree::<usize, String>::new();
+        let mut tree = Tree::new();
         let mut res = tree.insert(42, forty_two);
         assert_eq!(None, res);
         assert_eq!(1, tree.len());
@@ -251,7 +251,7 @@ mod test {
 
     #[test]
     fn first_and_last() {
-        let mut tree = Tree::<usize, String>::new();
+        let mut tree = Tree::new();
         assert_eq!(None, tree.first());
         assert_eq!(None, tree.last());
 
@@ -275,7 +275,7 @@ mod test {
     #[test]
     fn insert_multiple_values() {
         let data: Vec<(usize, String)> = (0..100).map(|i| (i, format!("{i}"))).collect();
-        let mut tree = Tree::<usize, String>::new();
+        let mut tree = Tree::new();
         for (k, v) in data.iter() {
             tree.insert(k.clone(), v.to_string());
         }
@@ -289,7 +289,7 @@ mod test {
 
     #[test]
     fn insert_same_key() {
-        let mut tree = Tree::<usize, String>::new();
+        let mut tree = Tree::new();
         let forty_two = "forty two".to_string();
         let mut res = tree.insert(42, forty_two.clone());
         assert_eq!(None, res);
@@ -301,7 +301,7 @@ mod test {
 
     #[test]
     fn pop_first() {
-        let mut tree = Tree::<usize, String>::new();
+        let mut tree = Tree::new();
 
         let mut res = tree.pop_first();
         assert_eq!(None, res);
@@ -343,7 +343,7 @@ mod test {
 
     #[test]
     fn pop_last() {
-        let mut tree = Tree::<usize, String>::new();
+        let mut tree = Tree::new();
 
         let mut res = tree.pop_last();
         assert_eq!(None, res);
@@ -385,7 +385,7 @@ mod test {
 
     #[test]
     fn remove() {
-        let mut tree = Tree::<usize, String>::new();
+        let mut tree = Tree::new();
 
         let mut res = tree.remove(&42);
         assert_eq!(None, res);
