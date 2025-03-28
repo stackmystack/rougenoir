@@ -1,6 +1,6 @@
-use std::{borrow::Borrow, cmp::Ordering::*, ptr::NonNull};
+use std::{borrow::Borrow, cmp::Ordering::*, mem, ptr::NonNull};
 
-use crate::{Callbacks, Color, Node, NodePtr, NodePtrExt, Tree};
+use crate::{Callbacks, Color, Node, NodePtr, NodePtrExt, Root, Tree};
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
@@ -36,6 +36,18 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
             }
             let _ = unsafe { Box::from_raw(current.as_ptr()) };
         }
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
+    pub fn clear(&mut self) {
+        drop(Tree {
+            root: Root {
+                callbacks: mem::replace(&mut self.root.callbacks, C::default()),
+                root: mem::replace(&mut self.root.root, None),
+            },
+            len: mem::replace(&mut self.len, 0),
+        });
     }
 }
 
@@ -184,10 +196,33 @@ mod test {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn tree_ctor_works() {
-        let tree = Tree::<usize, String>::new();
-        assert_eq!(tree.first(), None);
+    fn clear() {
+        let mut tree = Tree::new();
+        tree.clear();
         assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(0, tree.len());
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(1, tree.len());
+
+        tree.clear();
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(0, tree.len());
+
+        let zero = "zero".to_string();
+        let hando = "hundo".to_string();
+        tree.insert(0, zero);
+        tree.insert(42, forty_two.clone());
+        tree.insert(100, hando);
+        assert_eq!(true, tree.contains_key(&0));
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        tree.clear();
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(0, tree.len());
     }
 
     #[test]

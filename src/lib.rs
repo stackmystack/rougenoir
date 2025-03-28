@@ -171,6 +171,7 @@ pub trait Callbacks {
     fn rotate(&self, old: NodePtr<Self::Key, Self::Value>, new: NodePtr<Self::Key, Self::Value>);
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct Noop<K, V> {
     _phantom_k: PhantomData<K>,
     _phantom_v: PhantomData<V>,
@@ -211,8 +212,8 @@ impl<K, V> Callbacks for Noop<K, V> {
 /// A is the Augmented Callback type.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Root<K, V, C: Callbacks<Key = K, Value = V> = Noop<K, V>> {
-    callbacks: C,
-    root: NodePtr<K, V>,
+    pub(crate) callbacks: C,
+    pub(crate) root: NodePtr<K, V>,
 }
 
 #[derive(Debug)]
