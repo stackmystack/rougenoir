@@ -43,8 +43,8 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
     pub fn clear(&mut self) {
         drop(Tree {
             root: Root {
-                callbacks: mem::replace(&mut self.root.callbacks, C::default()),
-                root: mem::replace(&mut self.root.root, None),
+                callbacks: mem::take(&mut self.root.callbacks),
+                root: mem::take(&mut self.root.root),
             },
             len: mem::replace(&mut self.len, 0),
         });
@@ -121,7 +121,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         }
 
         let mut parent = link.unwrap().as_ptr();
-        while let Some(mut candidate) = link.clone() {
+        while let Some(mut candidate) = *link {
             parent = link.unwrap().as_ptr();
             let candidate = unsafe { candidate.as_mut() };
             match key.cmp(&candidate.key) {
@@ -134,11 +134,15 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         }
 
         let mut node = Box::new(Node::new(key, value));
-        node.link(NonNull::new(parent).unwrap(), &mut link);
+        node.link(NonNull::new(parent).unwrap(), link);
         let node = NonNull::new(Box::into_raw(node));
         self.root.insert(node.expect("cannot be null"));
         self.len += 1;
         None
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     // TODO
@@ -200,11 +204,12 @@ mod test {
         let mut tree = Tree::new();
         tree.clear();
         assert_eq!(false, tree.contains_key(&42));
-        assert_eq!(0, tree.len());
+        assert_eq!(true, tree.is_empty());
 
         let forty_two = "forty two".to_string();
         tree.insert(42, forty_two.clone());
         assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(false, tree.is_empty());
         assert_eq!(1, tree.len());
 
         tree.clear();
@@ -219,10 +224,12 @@ mod test {
         assert_eq!(true, tree.contains_key(&0));
         assert_eq!(true, tree.contains_key(&42));
         assert_eq!(true, tree.contains_key(&100));
+        assert_eq!(false, tree.is_empty());
 
         tree.clear();
         assert_eq!(false, tree.contains_key(&42));
         assert_eq!(0, tree.len());
+        assert_eq!(true, tree.is_empty());
     }
 
     #[test]
@@ -277,7 +284,7 @@ mod test {
         let data: Vec<(usize, String)> = (0..100).map(|i| (i, format!("{i}"))).collect();
         let mut tree = Tree::new();
         for (k, v) in data.iter() {
-            tree.insert(k.clone(), v.to_string());
+            tree.insert(*k, v.to_string());
         }
 
         assert_eq!(data.len(), tree.len());

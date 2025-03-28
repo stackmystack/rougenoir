@@ -186,8 +186,8 @@ impl<K, V> Default for Noop<K, V> {
 impl<K, V> Noop<K, V> {
     pub fn new() -> Self {
         Noop {
-            _phantom_k: PhantomData::default(),
-            _phantom_v: PhantomData::default(),
+            _phantom_k: PhantomData,
+            _phantom_v: PhantomData,
         }
     }
 }
@@ -246,5 +246,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C>
     }
 }
 
+// TODO:
+
+// 1. Send + Sync impl
+// 1. TreeCached
 // pub type RBTreeCached<K, V> = Tree<RootCached<K, V, DummyAugmenter<K, V>>>;
 // pub type RBTreeCachedAugmented<K, V, A> = Tree<RootCached<K, V, A>>;
