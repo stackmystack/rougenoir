@@ -52,7 +52,6 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    #[allow(dead_code)]
     pub(crate) fn next(&self) -> NodePtr<K, V> {
         /*
          * If we have a right-hand child, go down and then left as far
@@ -71,14 +70,23 @@ impl<K, V> Node<K, V> {
          * parent, keep going up. First time it's a left-hand child of its
          * parent, said parent is our 'next' node.
          */
-        let mut current = self;
-        while let Some(parent) = current.parent() {
-            if unsafe { parent.as_ref() }.right.is_some() {
-                return Some(parent);
+        let mut node_ref = self;
+        let mut parent;
+        loop {
+            parent = node_ref.parent();
+            if parent.is_none() {
+                break;
             }
-            current = unsafe { parent.as_ref() };
+            if parent
+                .right()
+                .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
+                .unwrap_or(false)
+            {
+                break;
+            }
+            node_ref = unsafe { parent.unwrap().as_ref() };
         }
-        None
+        parent
     }
 
     #[inline(always)]
@@ -97,7 +105,6 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    #[allow(dead_code)]
     pub(crate) fn prev(&self) -> NodePtr<K, V> {
         /*
          * If we have a left-hand child, go down and then right as far
@@ -114,14 +121,23 @@ impl<K, V> Node<K, V> {
          * No left-hand children. Go up till we find an ancestor which
          * is a right-hand child of its parent.
          */
-        let mut current = self;
-        while let Some(parent) = current.parent() {
-            if unsafe { parent.as_ref() }.left.is_some() {
-                return Some(parent);
+        let mut node_ref = self;
+        let mut parent;
+        loop {
+            parent = node_ref.parent();
+            if parent.is_none() {
+                break;
             }
-            current = unsafe { parent.as_ref() };
+            if parent
+                .left()
+                .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
+                .unwrap_or(false)
+            {
+                break;
+            }
+            node_ref = unsafe { parent.unwrap().as_ref() };
         }
-        None
+        parent
     }
 
     /// This is technically [`Self::parent()`] but doesn't reset the color bit.

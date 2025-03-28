@@ -36,10 +36,8 @@ pub(crate) trait NodePtrExt {
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
     fn left(&self) -> NodePtr<Self::Key, Self::Value>;
-    #[allow(dead_code)]
     fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn parent(&self) -> NodePtr<Self::Key, Self::Value>;
-    #[allow(dead_code)]
     fn prev_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn ptr_value(&self) -> usize;
     fn red_parent(&self) -> NodePtr<Self::Key, Self::Value>;

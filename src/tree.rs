@@ -217,10 +217,10 @@ mod test {
         assert_eq!(0, tree.len());
 
         let zero = "zero".to_string();
-        let hando = "hundo".to_string();
+        let hundo = "hundo".to_string();
         tree.insert(0, zero);
         tree.insert(42, forty_two.clone());
-        tree.insert(100, hando);
+        tree.insert(100, hundo);
         assert_eq!(true, tree.contains_key(&0));
         assert_eq!(true, tree.contains_key(&42));
         assert_eq!(true, tree.contains_key(&100));
@@ -241,11 +241,11 @@ mod test {
         assert_eq!(1, tree.len());
 
         let zero = "zero".to_string();
-        let hando = "hundo".to_string();
+        let hundo = "hundo".to_string();
         res = tree.insert(0, zero);
         assert_eq!(None, res);
         assert_eq!(2, tree.len());
-        res = tree.insert(100, hando);
+        res = tree.insert(100, hundo);
         assert_eq!(None, res);
         assert_eq!(3, tree.len());
 
