@@ -1,4 +1,5 @@
 /// Translated from the linux kernel's implementation of red-black trees.
+mod iter;
 mod node;
 mod root;
 mod tree;
