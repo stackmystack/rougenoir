@@ -202,6 +202,20 @@ mod test {
     }
 
     #[test]
+    fn iter_rev_insert() {
+        let mut tree = Tree::new();
+        for i in (0..128).rev() {
+            tree.insert(i, ());
+        }
+        let mut iter = tree.iter();
+        for i in 0..128 {
+            assert_eq!(Some((&i, &())), iter.next());
+        }
+        assert_eq!(None, iter.next());
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
     fn iter_mut_empty() {
         let mut tree = Tree::<usize, ()>::new();
         assert_eq!(None, tree.iter_mut().next());

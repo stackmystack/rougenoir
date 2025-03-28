@@ -77,10 +77,12 @@ impl<K, V> Node<K, V> {
             if parent.is_none() {
                 break;
             }
+            let a = node_ref as *const Node<K, V>;
+            let b = parent.right().map_or(std::ptr::null(), |p| p.as_ptr());
             if parent
                 .right()
                 .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
-                .unwrap_or(false)
+                .unwrap_or(true)
             {
                 break;
             }
@@ -131,7 +133,7 @@ impl<K, V> Node<K, V> {
             if parent
                 .left()
                 .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
-                .unwrap_or(false)
+                .unwrap_or(true)
             {
                 break;
             }
