@@ -94,7 +94,7 @@ impl<'a, K, V, C: Callbacks<Key = K, Value = V>> Iterator for IterMut<'a, K, V, 
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
+impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     pub fn iter(&self) -> Iter<K, V, C> {
         Iter {
             next: self.root.first(),
