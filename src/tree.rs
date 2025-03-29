@@ -272,6 +272,22 @@ impl<K: Ord, V: Ord, C: Ord> Ord for Tree<K, V, C> {
     }
 }
 
+unsafe impl<K, V, C> Send for Tree<K, V, C>
+where
+    K: Send,
+    V: Send,
+    C: Send,
+{
+}
+
+unsafe impl<K, V, C> Sync for Tree<K, V, C>
+where
+    K: Sync,
+    V: Sync,
+    C: Sync,
+{
+}
+
 #[cfg(test)]
 mod test {
     use crate::Noop;
