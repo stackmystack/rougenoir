@@ -263,6 +263,15 @@ impl<K: PartialOrd, V: PartialOrd, C: PartialOrd> PartialOrd for Tree<K, V, C> {
     }
 }
 
+impl<K: Eq, V: Eq, C: Eq> Eq for Tree<K, V, C> {}
+
+impl<K: Ord, V: Ord, C: Ord> Ord for Tree<K, V, C> {
+    #[inline]
+    fn cmp(&self, other: &Tree<K, V, C>) -> Ordering {
+        self.iter().cmp(other.iter())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::Noop;
