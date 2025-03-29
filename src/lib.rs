@@ -173,7 +173,7 @@ pub trait Callbacks {
     fn rotate(&self, old: NodePtr<Self::Key, Self::Value>, new: NodePtr<Self::Key, Self::Value>);
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Noop<K, V> {
     _phantom_k: PhantomData<K>,
     _phantom_v: PhantomData<V>,

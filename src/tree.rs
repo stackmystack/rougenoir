@@ -1,4 +1,10 @@
-use std::{borrow::Borrow, cmp::Ordering::*, mem, ops::Index, ptr::NonNull};
+use std::{
+    borrow::Borrow,
+    cmp::Ordering::{self, *},
+    mem,
+    ops::Index,
+    ptr::NonNull,
+};
 
 use crate::{Callbacks, Color, Node, NodePtr, NodePtrExt, Root, Tree};
 
@@ -250,6 +256,13 @@ where
     }
 }
 
+impl<K: PartialOrd, V: PartialOrd, C: PartialOrd> PartialOrd for Tree<K, V, C> {
+    #[inline]
+    fn partial_cmp(&self, other: &Tree<K, V, C>) -> Option<Ordering> {
+        self.iter().partial_cmp(other.iter())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::Noop;
@@ -490,6 +503,43 @@ mod test {
         res = tree.insert(42, "42".to_string());
         assert_eq!(Some(forty_two), res);
         assert_eq!(1, tree.len());
+    }
+
+    #[test]
+    fn partial_ord() {
+        let mut t1 = Tree::new();
+        let mut t2 = Tree::new();
+        let one = "one";
+        let two = "two";
+        let three = "three";
+
+        assert!(t1 <= t2);
+        assert!(t1 >= t2);
+        assert!(t1 == t2);
+        assert!(!(t1 < t2));
+        assert!(!(t1 > t2));
+
+        t1.insert(1, one);
+        t2.insert(1, one);
+        assert!(t1 <= t2);
+        assert!(t1 >= t2);
+        assert!(t1 == t2);
+        assert!(!(t1 < t2));
+        assert!(!(t1 > t2));
+
+        t2.insert(2, two);
+        assert!(t1 <= t2);
+        assert!(!(t1 >= t2));
+        assert!(!(t1 == t2));
+        assert!(t1 < t2);
+        assert!(!(t1 > t2));
+
+        t1.insert(3, three);
+        assert!(!(t1 <= t2));
+        assert!(t1 >= t2);
+        assert!(!(t1 == t2));
+        assert!(!(t1 < t2));
+        assert!(t1 > t2);
     }
 
     #[test]
