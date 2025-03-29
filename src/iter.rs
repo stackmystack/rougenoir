@@ -260,10 +260,49 @@ impl<K, V, C> Tree<K, V, C> {
     }
 }
 
+impl<K: Ord, V, C: Callbacks<Key = K, Value = V>> Extend<(K, V)> for Tree<K, V, C> {
+    #[inline]
+    fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
+        iter.into_iter().for_each(move |(k, v)| {
+            self.insert(k, v);
+        });
+    }
+}
+
+impl<'a, K: Ord + Copy, V: Copy, C: Callbacks<Key = K, Value = V>> Extend<(&'a K, &'a V)>
+    for Tree<K, V, C>
+{
+    fn extend<I: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: I) {
+        self.extend(iter.into_iter().map(|(&key, &value)| (key, value)));
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{Noop, Tree};
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn extend() {
+        let mut tree = Tree::new();
+        let zero = "zero".to_string();
+        let one = "one".to_string();
+        let forty_two = "forty_two".to_string();
+        let hundo = "hundo".to_string();
+
+        tree.insert(100, hundo.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(42, forty_two.clone());
+        tree.extend(vec![(1, one.clone())]);
+
+        assert_eq!(4, tree.len());
+        let mut iter = tree.iter();
+        assert_eq!(Some((&0, &zero)), iter.next());
+        assert_eq!(Some((&1, &one)), iter.next());
+        assert_eq!(Some((&42, &forty_two)), iter.next());
+        assert_eq!(Some((&100, &hundo)), iter.next());
+        assert_eq!(None, iter.next());
+    }
 
     #[test]
     fn for_loop() {
