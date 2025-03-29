@@ -248,9 +248,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C>
     }
 }
 
-// TODO:
-
-// 1. Send + Sync impl
-// 1. TreeCached
+// TODO: TreeCached
 // pub type RBTreeCached<K, V> = Tree<RootCached<K, V, DummyAugmenter<K, V>>>;
 // pub type RBTreeCachedAugmented<K, V, A> = Tree<RootCached<K, V, A>>;

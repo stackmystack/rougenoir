@@ -138,6 +138,7 @@ pub struct IntoIter<K, V, C>(Tree<K, V, C>);
 impl<K, V, C> IntoIter<K, V, C> {
     /// Returns an iterator of references over the remaining items.
     #[inline]
+    #[allow(dead_code)]
     pub(super) fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             first: self.0.root.first(),
@@ -277,8 +278,8 @@ impl<K, V> ExactSizeIterator for Iter<'_, K, V> {
 impl<K, V> Clone for Iter<'_, K, V> {
     fn clone(&self) -> Self {
         Iter {
-            first: self.first.clone(),
-            last: self.last.clone(),
+            first: self.first,
+            last: self.last,
             len: self.len,
             _phantom_k: PhantomData,
             _phantom_v: PhantomData,
@@ -360,8 +361,8 @@ impl<K, V> FusedIterator for IterMut<'_, K, V> {}
 impl<K, V> Clone for IterMut<'_, K, V> {
     fn clone(&self) -> Self {
         IterMut {
-            first: self.first.clone(),
-            last: self.last.clone(),
+            first: self.first,
+            last: self.last,
             len: self.len,
             _phantom_k: PhantomData,
             _phantom_v: PhantomData,
@@ -673,12 +674,14 @@ mod test {
         tree.insert(0, zero.clone());
         tree.insert(42, forty_two.clone());
 
-        for (_k, _v) in &tree {
-            assert!(true);
+        for (k, _v) in &tree {
+            // This is a test for compilation.
+            let _ = k;
         }
 
-        for (_k, _v) in tree {
-            assert!(true);
+        for (_k, v) in tree {
+            // This is a test for compilation.
+            let _ = v;
         }
     }
 
@@ -733,7 +736,6 @@ mod test {
         assert_eq!(None, iter.next());
 
         let mut tree = Tree::new();
-        // TODO: when I do (0..128).rev(), i = 1 disappears from the tree
         for i in 0..128 {
             tree.insert(i, ());
         }

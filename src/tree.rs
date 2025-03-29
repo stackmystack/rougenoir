@@ -139,9 +139,6 @@ impl<K, V, C> Tree<K, V, C> {
         self.len == 0
     }
 
-    // TODO
-    // fn keys(&self) -> Keys<'a, K, V>;
-
     pub fn last(&self) -> Option<&V> {
         self.root.last().map(|n| &unsafe { n.as_ref() }.value)
     }
@@ -161,8 +158,6 @@ impl<K, V, C> Tree<K, V, C> {
     // fn retain<F>(&mut self, f: F)
     // where
     //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
-    // fn values(&self) -> Values<'a, self::key, self::value>;
-    // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
 }
 
 impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
