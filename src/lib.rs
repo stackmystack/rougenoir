@@ -213,13 +213,13 @@ impl<K, V> Callbacks for Noop<K, V> {
 /// T is the type of the data stored in the tree.
 /// A is the Augmented Callback type.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Root<K, V, C: Callbacks<Key = K, Value = V> = Noop<K, V>> {
+pub struct Root<K, V, C> {
     pub(crate) callbacks: C,
     pub(crate) root: NodePtr<K, V>,
 }
 
 #[derive(Debug)]
-pub struct Tree<K, V, C: Callbacks<Key = K, Value = V> = Noop<K, V>> {
+pub struct Tree<K, V, C> {
     len: usize,
     root: Root<K, V, C>,
 }

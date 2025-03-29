@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{Callbacks, NodePtr, Tree};
 
-pub struct IntoIter<K, V, C: Callbacks<Key = K, Value = V>>(Tree<K, V, C>);
+pub struct IntoIter<K, V, C>(Tree<K, V, C>);
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> IntoIterator for Tree<K, V, C> {
     type Item = (K, V);
@@ -80,7 +80,7 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+impl<K, V, C> Tree<K, V, C> {
     pub fn iter(&self) -> Iter<K, V> {
         Iter {
             next: self.root.first(),
@@ -102,12 +102,12 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
 
 #[cfg(test)]
 mod test {
-    use crate::Tree;
+    use crate::{Noop, Tree};
     use pretty_assertions::assert_eq;
 
     #[test]
     fn into_iter_empty() {
-        let tree = Tree::<usize, ()>::new();
+        let tree = Tree::<usize, (), Noop<usize, ()>>::new();
         let vec = tree.into_iter().collect::<Vec<_>>();
         assert_eq!(0, vec.len());
     }
@@ -132,7 +132,7 @@ mod test {
 
     #[test]
     fn iter_empty() {
-        let tree = Tree::<usize, ()>::new();
+        let tree = Tree::<usize, (), Noop<usize, ()>>::new();
         assert_eq!(None, tree.iter().next());
     }
 
@@ -184,7 +184,7 @@ mod test {
 
     #[test]
     fn iter_mut_empty() {
-        let mut tree = Tree::<usize, ()>::new();
+        let mut tree = Tree::<usize, (), Noop<usize, ()>>::new();
         assert_eq!(None, tree.iter_mut().next());
     }
 

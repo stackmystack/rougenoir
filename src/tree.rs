@@ -15,6 +15,65 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
 }
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+    pub fn insert(&mut self, key: K, value: V) -> Option<V>
+    where
+        K: Ord,
+    {
+        let mut link = &mut self.root.root;
+        if link.is_none() {
+            let mut node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
+            node.set_parent_color(Color::Black as usize);
+            self.root.root = node;
+            self.len += 1;
+            return None;
+        }
+
+        let mut parent = link.unwrap().as_ptr();
+        while let Some(mut candidate) = *link {
+            parent = link.unwrap().as_ptr();
+            let candidate = unsafe { candidate.as_mut() };
+            match key.cmp(&candidate.key) {
+                Equal => {
+                    return Some(std::mem::replace(&mut candidate.value, value));
+                }
+                Greater => link = &mut candidate.right,
+                Less => link = &mut candidate.left,
+            }
+        }
+
+        let mut node = Box::new(Node::new(key, value));
+        node.link(NonNull::new(parent).unwrap(), link);
+        let node = NonNull::new(Box::into_raw(node));
+        self.root.insert(node.expect("cannot be null"));
+        self.len += 1;
+        None
+    }
+
+    pub fn pop_first(&mut self) -> Option<(K, V)> {
+        Some(self.pop_node(self.root.first()?))
+    }
+
+    pub fn pop_last(&mut self) -> Option<(K, V)> {
+        Some(self.pop_node(self.root.last()?))
+    }
+
+    fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> (K, V) {
+        self.root.erase(node);
+        let first_node = unsafe { Box::from_raw(node.as_ptr()) };
+        self.len -= 1;
+        (first_node.key, first_node.value)
+    }
+
+    pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
+    {
+        Some(self.pop_node(self.find_node(key)?).1)
+    }
+}
+
+impl<K, V, C> Tree<K, V, C> {
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q> + Ord,
@@ -70,40 +129,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         })
     }
 
-    pub fn insert(&mut self, key: K, value: V) -> Option<V>
-    where
-        K: Ord,
-    {
-        let mut link = &mut self.root.root;
-        if link.is_none() {
-            let mut node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
-            node.set_parent_color(Color::Black as usize);
-            self.root.root = node;
-            self.len += 1;
-            return None;
-        }
-
-        let mut parent = link.unwrap().as_ptr();
-        while let Some(mut candidate) = *link {
-            parent = link.unwrap().as_ptr();
-            let candidate = unsafe { candidate.as_mut() };
-            match key.cmp(&candidate.key) {
-                Equal => {
-                    return Some(std::mem::replace(&mut candidate.value, value));
-                }
-                Greater => link = &mut candidate.right,
-                Less => link = &mut candidate.left,
-            }
-        }
-
-        let mut node = Box::new(Node::new(key, value));
-        node.link(NonNull::new(parent).unwrap(), link);
-        let node = NonNull::new(Box::into_raw(node));
-        self.root.insert(node.expect("cannot be null"));
-        self.len += 1;
-        None
-    }
-
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -126,29 +151,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         self.len
     }
 
-    pub fn pop_first(&mut self) -> Option<(K, V)> {
-        Some(self.pop_node(self.root.first()?))
-    }
-
-    pub fn pop_last(&mut self) -> Option<(K, V)> {
-        Some(self.pop_node(self.root.last()?))
-    }
-
-    fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> (K, V) {
-        self.root.erase(node);
-        let first_node = unsafe { Box::from_raw(node.as_ptr()) };
-        self.len -= 1;
-        (first_node.key, first_node.value)
-    }
-
-    pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
-    where
-        K: Borrow<Q> + Ord,
-        Q: Ord + ?Sized,
-    {
-        Some(self.pop_node(self.find_node(key)?).1)
-    }
-
     // TODO
     // fn retain<F>(&mut self, f: F)
     // where
@@ -157,7 +159,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
+impl<K, V, C> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
         enum Direction {
             Left,
@@ -214,6 +216,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::Noop;
+
     use super::*;
     use pretty_assertions::assert_eq;
 
@@ -310,7 +314,7 @@ mod test {
     #[test]
     #[should_panic]
     fn index_panics() {
-        let tree: Tree<usize, ()> = Tree::new();
+        let tree: Tree<usize, (), Noop<usize, ()>> = Tree::new();
         assert_eq!((), tree[&42]);
     }
 

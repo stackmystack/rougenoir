@@ -8,6 +8,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Root<K, V, C>
     }
 }
 
+// Public
 impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     pub fn new(augmented: C) -> Self {
         Root {
@@ -16,33 +17,186 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
         }
     }
 
-    fn change_child(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, parent: NodePtr<K, V>) {
-        if let Some(mut parent) = parent {
-            let parent = unsafe { parent.as_mut() };
-            if parent.left == old {
-                parent.left = new;
-            } else {
-                parent.right = new;
+    pub fn erase(&mut self, node: NonNull<Node<K, V>>) {
+        let rebalance = self.erase_augmented(node);
+        if rebalance.is_some() {
+            self.erase_color(rebalance);
+        }
+    }
+
+    pub fn insert(&mut self, node: NonNull<Node<K, V>>) {
+        let mut node: NodePtr<K, V> = node.into();
+        let mut parent = node.red_parent();
+        let mut gparent;
+        let mut tmp;
+
+        loop {
+            /*
+             * Loop invariant: node is red.
+             */
+            // TODO: unlikely hint, but it's nightly only.
+            if parent.is_none() {
+                /*
+                 * The inserted node is root. Either this is the
+                 * first node, or we recursed at Case 1 below and
+                 * are no longer violating 4).
+                 */
+                node.set_parent_and_color(None, Color::Black);
+                break;
             }
-        } else {
-            self.root = new;
+
+            /*
+             * If there is a black parent, we are done.
+             * Otherwise, take some corrective action as,
+             * per 4), we don't want a red root or two
+             * consecutive red nodes.
+             */
+            if parent.is_black() {
+                break;
+            }
+
+            gparent = parent.red_parent();
+            tmp = gparent.right();
+
+            if parent != tmp {
+                /* parent == gparent->rb_left */
+                if tmp.is_red() {
+                    /*
+                     * Case 1 - node's uncle is red (color flips).
+                     *
+                     *       G            g
+                     *      / \          / \
+                     *     p   u  -->   P   U
+                     *    /            /
+                     *   n            n
+                     *
+                     * However, since g's parent might be red, and
+                     * 4) does not allow this, we need to recurse
+                     * at g.
+                     */
+                    tmp.set_parent_and_color(gparent, Color::Black);
+                    parent.set_parent_and_color(gparent, Color::Black);
+                    node = gparent;
+                    parent = node.parent();
+                    node.set_parent_and_color(parent, Color::Red);
+                    continue;
+                }
+
+                tmp = parent.right();
+                if node == tmp {
+                    /*
+                     * Case 2 - node's uncle is black and node is
+                     * the parent's right child (left rotate at parent).
+                     *
+                     *      G             G
+                     *     / \           / \
+                     *    p   U  -->    n   U
+                     *     \           /
+                     *      n         p
+                     *
+                     * This still leaves us in violation of 4), the
+                     * continuation into Case 3 will fix that.
+                     */
+                    tmp = node.left();
+                    parent.set_right(tmp);
+                    node.set_left(parent);
+                    tmp.set_parent_and_color(parent, Color::Black);
+                    parent.set_parent_and_color(node, Color::Red);
+                    self.callbacks.rotate(parent, node);
+                    parent = node;
+                    tmp = node.right();
+                }
+
+                /*
+                 * Case 3 - node's uncle is black and node is
+                 * the parent's left child (right rotate at gparent).
+                 *
+                 *        G           P
+                 *       / \         / \
+                 *      p   U  -->  n   g
+                 *     /                 \
+                 *    n                   U
+                 */
+                gparent.set_left(tmp); /* == parent->rb_right */
+                parent.set_right(gparent);
+                tmp.set_parent_and_color(gparent, Color::Black);
+                self.rotate_set_parents(gparent, parent, Color::Red);
+                self.callbacks.rotate(gparent, parent);
+                break;
+            } else {
+                tmp = gparent.left();
+                if tmp.is_red() {
+                    /* Case 1 - color flips */
+                    tmp.set_parent_and_color(gparent, Color::Black);
+                    parent.set_parent_and_color(gparent, Color::Black);
+                    node = gparent;
+                    parent = node.parent();
+                    node.set_parent_and_color(parent, Color::Red);
+                    continue;
+                }
+
+                tmp = parent.left();
+                if node == tmp {
+                    /* Case 2 - right rotate at parent */
+                    tmp = node.right();
+                    parent.set_left(tmp);
+                    node.set_right(parent);
+                    tmp.set_parent_and_color(parent, Color::Black);
+                    parent.set_parent_and_color(node, Color::Red);
+                    self.callbacks.rotate(parent, node);
+                    parent = node;
+                    tmp = node.left();
+                }
+
+                /* Case 3 - left rotate at gparent */
+                gparent.set_right(tmp); /* == parent->rb_left */
+                parent.set_left(gparent);
+                tmp.set_parent_and_color(gparent, Color::Black);
+                self.rotate_set_parents(gparent, parent, Color::Red);
+                self.callbacks.rotate(gparent, parent);
+                break;
+            }
         }
     }
+}
 
-    /// Helper function for rotations:
-    /// - old's parent and color get assigned to new
-    /// - old gets assigned new as a parent and 'color' as a color.
-    #[inline]
-    fn rotate_set_parents(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, color: Color) {
-        if old.is_some() {
-            let old = unsafe { old.unwrap().as_mut() };
-            let parent = old.parent();
-            unsafe { new.unwrap().as_mut() }.parent_color = old.parent_color;
-            old.set_parent_and_color(new, color);
-            self.change_child(old.into(), new, parent);
+impl<K, V, C> Root<K, V, C> {
+    pub fn first(&self) -> NodePtr<K, V> {
+        let mut n = self.root?;
+        while let Some(left) = unsafe { n.as_ref() }.left {
+            n = left;
         }
+        Some(n)
     }
 
+    pub fn first_postorder(&self) -> NodePtr<K, V> {
+        let n = self.root?;
+        unsafe { n.as_ref() }.left_deepest_node()
+    }
+
+    pub fn last(&self) -> NodePtr<K, V> {
+        let mut n = self.root?;
+        while let Some(right) = unsafe { n.as_ref() }.right {
+            n = right;
+        }
+        Some(n)
+    }
+
+    pub fn replace_node(&mut self, mut victim: NonNull<Node<K, V>>, new: NonNull<Node<K, V>>) {
+        let new: NodePtr<K, V> = new.into();
+        let parent = unsafe { victim.as_ref() }.parent();
+        {
+            let victim = unsafe { victim.as_mut() };
+            victim.left.set_parent(new);
+            victim.right.set_parent(new);
+        }
+        self.change_child(victim.into(), new, parent);
+    }
+}
+
+// Private
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     #[inline]
     fn erase_augmented(&mut self, node: NonNull<Node<K, V>>) -> NodePtr<K, V> {
         let node = unsafe { node.as_ref() };
@@ -326,178 +480,31 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
-    pub fn first(&self) -> NodePtr<K, V> {
-        let mut n = self.root?;
-        while let Some(left) = unsafe { n.as_ref() }.left {
-            n = left;
-        }
-        Some(n)
-    }
-
-    pub fn first_postorder(&self) -> NodePtr<K, V> {
-        let n = self.root?;
-        unsafe { n.as_ref() }.left_deepest_node()
-    }
-
-    pub fn last(&self) -> NodePtr<K, V> {
-        let mut n = self.root?;
-        while let Some(right) = unsafe { n.as_ref() }.right {
-            n = right;
-        }
-        Some(n)
-    }
-
-    pub fn replace_node(&mut self, mut victim: NonNull<Node<K, V>>, new: NonNull<Node<K, V>>) {
-        let new: NodePtr<K, V> = new.into();
-        let parent = unsafe { victim.as_ref() }.parent();
-        {
-            let victim = unsafe { victim.as_mut() };
-            victim.left.set_parent(new);
-            victim.right.set_parent(new);
-        }
-        self.change_child(victim.into(), new, parent);
-    }
-
-    pub fn erase(&mut self, node: NonNull<Node<K, V>>) {
-        let rebalance = self.erase_augmented(node);
-        if rebalance.is_some() {
-            self.erase_color(rebalance);
-        }
-    }
-
-    pub fn insert(&mut self, node: NonNull<Node<K, V>>) {
-        let mut node: NodePtr<K, V> = node.into();
-        let mut parent = node.red_parent();
-        let mut gparent;
-        let mut tmp;
-
-        loop {
-            /*
-             * Loop invariant: node is red.
-             */
-            // TODO: unlikely hint, but it's nightly only.
-            if parent.is_none() {
-                /*
-                 * The inserted node is root. Either this is the
-                 * first node, or we recursed at Case 1 below and
-                 * are no longer violating 4).
-                 */
-                node.set_parent_and_color(None, Color::Black);
-                break;
-            }
-
-            /*
-             * If there is a black parent, we are done.
-             * Otherwise, take some corrective action as,
-             * per 4), we don't want a red root or two
-             * consecutive red nodes.
-             */
-            if parent.is_black() {
-                break;
-            }
-
-            gparent = parent.red_parent();
-            tmp = gparent.right();
-
-            if parent != tmp {
-                /* parent == gparent->rb_left */
-                if tmp.is_red() {
-                    /*
-                     * Case 1 - node's uncle is red (color flips).
-                     *
-                     *       G            g
-                     *      / \          / \
-                     *     p   u  -->   P   U
-                     *    /            /
-                     *   n            n
-                     *
-                     * However, since g's parent might be red, and
-                     * 4) does not allow this, we need to recurse
-                     * at g.
-                     */
-                    tmp.set_parent_and_color(gparent, Color::Black);
-                    parent.set_parent_and_color(gparent, Color::Black);
-                    node = gparent;
-                    parent = node.parent();
-                    node.set_parent_and_color(parent, Color::Red);
-                    continue;
-                }
-
-                tmp = parent.right();
-                if node == tmp {
-                    /*
-                     * Case 2 - node's uncle is black and node is
-                     * the parent's right child (left rotate at parent).
-                     *
-                     *      G             G
-                     *     / \           / \
-                     *    p   U  -->    n   U
-                     *     \           /
-                     *      n         p
-                     *
-                     * This still leaves us in violation of 4), the
-                     * continuation into Case 3 will fix that.
-                     */
-                    tmp = node.left();
-                    parent.set_right(tmp);
-                    node.set_left(parent);
-                    tmp.set_parent_and_color(parent, Color::Black);
-                    parent.set_parent_and_color(node, Color::Red);
-                    self.callbacks.rotate(parent, node);
-                    parent = node;
-                    tmp = node.right();
-                }
-
-                /*
-                 * Case 3 - node's uncle is black and node is
-                 * the parent's left child (right rotate at gparent).
-                 *
-                 *        G           P
-                 *       / \         / \
-                 *      p   U  -->  n   g
-                 *     /                 \
-                 *    n                   U
-                 */
-                gparent.set_left(tmp); /* == parent->rb_right */
-                parent.set_right(gparent);
-                tmp.set_parent_and_color(gparent, Color::Black);
-                self.rotate_set_parents(gparent, parent, Color::Red);
-                self.callbacks.rotate(gparent, parent);
-                break;
+impl<K, V, C> Root<K, V, C> {
+    fn change_child(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, parent: NodePtr<K, V>) {
+        if let Some(mut parent) = parent {
+            let parent = unsafe { parent.as_mut() };
+            if parent.left == old {
+                parent.left = new;
             } else {
-                tmp = gparent.left();
-                if tmp.is_red() {
-                    /* Case 1 - color flips */
-                    tmp.set_parent_and_color(gparent, Color::Black);
-                    parent.set_parent_and_color(gparent, Color::Black);
-                    node = gparent;
-                    parent = node.parent();
-                    node.set_parent_and_color(parent, Color::Red);
-                    continue;
-                }
-
-                tmp = parent.left();
-                if node == tmp {
-                    /* Case 2 - right rotate at parent */
-                    tmp = node.right();
-                    parent.set_left(tmp);
-                    node.set_right(parent);
-                    tmp.set_parent_and_color(parent, Color::Black);
-                    parent.set_parent_and_color(node, Color::Red);
-                    self.callbacks.rotate(parent, node);
-                    parent = node;
-                    tmp = node.left();
-                }
-
-                /* Case 3 - left rotate at gparent */
-                gparent.set_right(tmp); /* == parent->rb_left */
-                parent.set_left(gparent);
-                tmp.set_parent_and_color(gparent, Color::Black);
-                self.rotate_set_parents(gparent, parent, Color::Red);
-                self.callbacks.rotate(gparent, parent);
-                break;
+                parent.right = new;
             }
+        } else {
+            self.root = new;
+        }
+    }
+
+    /// Helper function for rotations:
+    /// - old's parent and color get assigned to new
+    /// - old gets assigned new as a parent and 'color' as a color.
+    #[inline]
+    fn rotate_set_parents(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, color: Color) {
+        if old.is_some() {
+            let old = unsafe { old.unwrap().as_mut() };
+            let parent = old.parent();
+            unsafe { new.unwrap().as_mut() }.parent_color = old.parent_color;
+            old.set_parent_and_color(new, color);
+            self.change_child(old.into(), new, parent);
         }
     }
 }
