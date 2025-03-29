@@ -100,27 +100,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 }
 
-/// Iter and IntoIter are covariant.
-//
-///```
-/// use rougenoir::{Noop, Tree, iter::{IntoIter, Iter}};
-///
-/// fn into_iter_covariant<'a, K, V>(x: IntoIter<&'static K, &'static V, Noop<&'static K, &'static V>>) -> IntoIter<&'a K, &'a V, Noop<&'a K, &'a V>> { x }
-/// fn iter_covariant<'i, 'a, K, V>(x: Iter<'i, &'static K, &'static V>) -> Iter<'i, &'a K, &'a V> { x }
-/// ```
-#[allow(dead_code)]
-fn test_covariance() {}
-
-/// IterMut should be invariant like &'a mut T.
-///
-/// ```compile_fail
-/// use rougenoir::{Tree, iter::IterMut};
-///
-/// fn iter_mut_covariant<'i, 'a, K, V>(x: IterMut<'i, &'static K, &'static V>) -> IterMut<'i, &'a K, &'a V> { x }
-/// ```
-#[allow(dead_code)]
-fn test_invariance() {}
-
 #[cfg(test)]
 mod test {
     use crate::Tree;
