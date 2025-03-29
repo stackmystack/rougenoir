@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, marker::PhantomData, ops::Index};
 
-use crate::{Callbacks, NodePtr, NodePtrExt, Tree};
+use crate::{Callbacks, NodePtr, Tree};
 
 impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
 where
@@ -74,22 +74,27 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
     }
 }
 
-pub struct IterMut<'a, K, V>(Iter<'a, K, V>);
+pub struct IterMut<'a, K, V> {
+    next: NodePtr<K, V>,
+    len: usize,
+    _phantom_k: PhantomData<&'a K>,
+    _phantom_v: PhantomData<&'a mut V>,
+}
 
 impl<'a, K, V> Iterator for IterMut<'a, K, V> {
     type Item = &'a mut V;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next.map(|mut n| {
+        self.next.map(|mut n| {
             let n = unsafe { n.as_mut() };
-            self.0.len -= 1;
-            self.0.next = n.next();
+            self.len -= 1;
+            self.next = n.next();
             &mut n.value
         })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.0.len, Some(self.0.len))
+        (self.len, Some(self.len))
     }
 }
 
@@ -104,14 +109,35 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 
     pub fn iter_mut(&mut self) -> IterMut<K, V> {
-        IterMut(Iter {
+        IterMut {
             next: self.root.first(),
             len: self.len,
             _phantom_k: PhantomData,
             _phantom_v: PhantomData,
-        })
+        }
     }
 }
+
+/// Iter and IntoIter are covariant.
+//
+///```
+/// use rougenoir::{Noop, Tree, iter::{IntoIter, Iter}};
+///
+/// fn into_iter_covariant<'a, K, V>(x: IntoIter<&'static K, &'static V, Noop<&'static K, &'static V>>) -> IntoIter<&'a K, &'a V, Noop<&'a K, &'a V>> { x }
+/// fn iter_covariant<'i, 'a, K, V>(x: Iter<'i, &'static K, &'static V>) -> Iter<'i, &'a K, &'a V> { x }
+/// ```
+#[allow(dead_code)]
+fn test_covariance() {}
+
+/// IterMut should be invariant like &'a mut T.
+///
+/// ```compile_fail
+/// use rougenoir::{Tree, iter::IterMut};
+///
+/// fn iter_mut_covariant<'i, 'a, K, V>(x: IterMut<'i, &'static K, &'static V>) -> IterMut<'i, &'a K, &'a V> { x }
+/// ```
+#[allow(dead_code)]
+fn test_invariance() {}
 
 #[cfg(test)]
 mod test {
