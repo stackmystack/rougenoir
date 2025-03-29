@@ -1,43 +1,6 @@
-use std::{borrow::Borrow, cmp::Ordering::*, mem, ptr::NonNull};
+use std::{borrow::Borrow, cmp::Ordering::*, mem, ops::Index, ptr::NonNull};
 
 use crate::{Callbacks, Color, Node, NodePtr, NodePtrExt, Root, Tree};
-
-impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
-    fn drop(&mut self) {
-        enum Direction {
-            Left,
-            Right,
-        }
-        let mut parent = self.root.root;
-        let mut direction = Vec::new();
-        // max depth = 2 × log₂(n+1)
-        let log_val = (self.len + 1).checked_ilog2().unwrap_or(0) as usize;
-        direction.reserve(log_val.checked_mul(2).unwrap_or(usize::MAX).max(4096));
-        while let Some(current) = parent {
-            let current_ref = unsafe { current.as_ref() };
-            if current_ref.left.is_some() {
-                parent = current_ref.left;
-                direction.push(Direction::Left);
-                continue;
-            }
-            if current_ref.right.is_some() {
-                parent = current_ref.right;
-                direction.push(Direction::Right);
-                continue;
-            }
-            parent = current_ref.parent();
-            // drop; don't call rbtree erase => needless overhead.
-            if parent.is_some() {
-                match direction.pop() {
-                    Some(Direction::Left) => unsafe { parent.unwrap().as_mut() }.left = None,
-                    Some(Direction::Right) => unsafe { parent.unwrap().as_mut() }.right = None,
-                    _ => {}
-                }
-            }
-            let _ = unsafe { Box::from_raw(current.as_ptr()) };
-        }
-    }
-}
 
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
     pub fn clear(&mut self) {
@@ -194,6 +157,61 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
 }
 
+impl<K, V, C: Callbacks<Key = K, Value = V>> Drop for Tree<K, V, C> {
+    fn drop(&mut self) {
+        enum Direction {
+            Left,
+            Right,
+        }
+        let mut parent = self.root.root;
+        let mut direction = Vec::new();
+        // max depth = 2 × log₂(n+1)
+        let log_val = (self.len + 1).checked_ilog2().unwrap_or(0) as usize;
+        direction.reserve(log_val.checked_mul(2).unwrap_or(usize::MAX).max(4096));
+        while let Some(current) = parent {
+            let current_ref = unsafe { current.as_ref() };
+            if current_ref.left.is_some() {
+                parent = current_ref.left;
+                direction.push(Direction::Left);
+                continue;
+            }
+            if current_ref.right.is_some() {
+                parent = current_ref.right;
+                direction.push(Direction::Right);
+                continue;
+            }
+            parent = current_ref.parent();
+            // drop; don't call rbtree erase => needless overhead.
+            if parent.is_some() {
+                match direction.pop() {
+                    Some(Direction::Left) => unsafe { parent.unwrap().as_mut() }.left = None,
+                    Some(Direction::Right) => unsafe { parent.unwrap().as_mut() }.right = None,
+                    _ => {}
+                }
+            }
+            let _ = unsafe { Box::from_raw(current.as_ptr()) };
+        }
+    }
+}
+
+impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
+where
+    K: Borrow<Q> + Ord,
+    Q: Ord,
+{
+    type Output = V;
+
+    /// Returns a reference to the value corresponding to the supplied key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the key is not present in the `Tree`.
+    #[inline]
+    fn index(&self, key: &Q) -> &V {
+        self.get(key).expect("no entry found for key")
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -277,6 +295,23 @@ mod test {
         assert_eq!(Some((&0, &zero)), tree.first_key_value());
         assert_eq!(Some(&hundo), tree.last());
         assert_eq!(Some((&100, &hundo)), tree.last_key_value());
+    }
+
+    #[test]
+    fn index_passes() {
+        let mut tree = Tree::new();
+        let forty_two_str = "forty two";
+        let forty_two = forty_two_str.to_string();
+        tree.insert(forty_two.clone(), forty_two.clone());
+        assert_eq!(forty_two, tree[forty_two_str]);
+        assert_eq!(forty_two, tree[&forty_two]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn index_panics() {
+        let tree: Tree<usize, ()> = Tree::new();
+        assert_eq!((), tree[&42]);
     }
 
     #[test]
