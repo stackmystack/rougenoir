@@ -50,15 +50,14 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> DoubleEndedIterator for IntoIter<K,
     }
 }
 
-pub struct Iter<'a, K, V, C: Callbacks<Key = K, Value = V>> {
+pub struct Iter<'a, K, V> {
     next: NodePtr<K, V>,
     len: usize,
     _phantom_k: PhantomData<&'a K>,
     _phantom_v: PhantomData<&'a V>,
-    _phantom_c: PhantomData<C>,
 }
 
-impl<'a, K, V, C: Callbacks<Key = K, Value = V>> Iterator for Iter<'a, K, V, C> {
+impl<'a, K, V> Iterator for Iter<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -75,9 +74,9 @@ impl<'a, K, V, C: Callbacks<Key = K, Value = V>> Iterator for Iter<'a, K, V, C> 
     }
 }
 
-pub struct IterMut<'a, K, V, C: Callbacks<Key = K, Value = V>>(Iter<'a, K, V, C>);
+pub struct IterMut<'a, K, V>(Iter<'a, K, V>);
 
-impl<'a, K, V, C: Callbacks<Key = K, Value = V>> Iterator for IterMut<'a, K, V, C> {
+impl<'a, K, V> Iterator for IterMut<'a, K, V> {
     type Item = &'a mut V;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -95,23 +94,21 @@ impl<'a, K, V, C: Callbacks<Key = K, Value = V>> Iterator for IterMut<'a, K, V, 
 }
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
-    pub fn iter(&self) -> Iter<K, V, C> {
+    pub fn iter(&self) -> Iter<K, V> {
         Iter {
             next: self.root.first(),
             len: self.len,
             _phantom_k: PhantomData,
             _phantom_v: PhantomData,
-            _phantom_c: PhantomData,
         }
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<K, V, C> {
+    pub fn iter_mut(&mut self) -> IterMut<K, V> {
         IterMut(Iter {
             next: self.root.first(),
             len: self.len,
             _phantom_k: PhantomData,
             _phantom_v: PhantomData,
-            _phantom_c: PhantomData,
         })
     }
 }
