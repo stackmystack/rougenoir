@@ -159,6 +159,24 @@ impl<K, V, C> Tree<K, V, C> {
     // fn values_mut(&mut self) -> ValuesMut<'a, self::key, self::value>;
 }
 
+impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
+where
+    K: Borrow<Q> + Ord,
+    Q: Ord,
+{
+    type Output = V;
+
+    /// Returns a reference to the value corresponding to the supplied key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the key is not present in the `Tree`.
+    #[inline]
+    fn index(&self, key: &Q) -> &V {
+        self.get(key).expect("no entry found for key")
+    }
+}
+
 impl<K, V, C> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
         enum Direction {
@@ -196,21 +214,39 @@ impl<K, V, C> Drop for Tree<K, V, C> {
     }
 }
 
-impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
-where
-    K: Borrow<Q> + Ord,
-    Q: Ord,
-{
-    type Output = V;
+impl<K: PartialEq, V: PartialEq, C: PartialEq> PartialEq for Tree<K, V, C> {
+    fn eq(&self, other: &Tree<K, V, C>) -> bool {
+        self.len() == other.len()
+            && self.root.callbacks == other.root.callbacks
+            && self.iter().zip(other.iter()).all(|(a, b)| a == b)
+    }
+}
 
-    /// Returns a reference to the value corresponding to the supplied key.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the key is not present in the `Tree`.
-    #[inline]
-    fn index(&self, key: &Q) -> &V {
-        self.get(key).expect("no entry found for key")
+impl<K, V, C> Clone for Tree<K, V, C>
+where
+    K: Clone + Ord,
+    V: Clone,
+    C: Clone + Callbacks<Key = K, Value = V>,
+{
+    fn clone(&self) -> Self {
+        if self.is_empty() {
+            Tree {
+                len: 0,
+                root: self.root.clone(),
+            }
+        } else {
+            let mut tree = Tree {
+                len: 0,
+                root: Root {
+                    callbacks: self.root.callbacks.clone(),
+                    root: None,
+                },
+            };
+            for (k, v) in self.iter() {
+                tree.insert(k.clone(), v.clone());
+            }
+            tree
+        }
     }
 }
 
@@ -219,7 +255,7 @@ mod test {
     use crate::Noop;
 
     use super::*;
-    use pretty_assertions::assert_eq;
+    use pretty_assertions::{assert_eq, assert_ne};
 
     #[test]
     fn clear() {
@@ -252,6 +288,117 @@ mod test {
         assert_eq!(false, tree.contains_key(&42));
         assert_eq!(0, tree.len());
         assert_eq!(true, tree.is_empty());
+    }
+
+    #[test]
+    fn clone_and_eq_for_unit() {
+        let mut t1 = Tree::new();
+        let mut t2 = t1.clone();
+        assert_eq!(t1, t2);
+
+        t1.insert(0, ());
+        t1.insert(1, ());
+        t1.insert(2, ());
+
+        assert_ne!(t1, t2);
+        assert_eq!(3, t1.len());
+        assert_eq!(0, t2.len());
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(false, t2.contains_key(&0));
+        assert_eq!(false, t2.contains_key(&1));
+        assert_eq!(false, t2.contains_key(&2));
+
+        t2.insert(0, ());
+        t2.insert(1, ());
+        t2.insert(2, ());
+        assert_eq!(t1, t2);
+        assert_eq!(3, t1.len());
+        assert_eq!(3, t2.len());
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(true, t2.contains_key(&0));
+        assert_eq!(true, t2.contains_key(&1));
+        assert_eq!(true, t2.contains_key(&2));
+    }
+
+    #[test]
+    fn clone_and_eq_for_string() {
+        let mut t1 = Tree::new();
+        let mut t2 = t1.clone();
+        assert_eq!(t1, t2);
+
+        t1.insert(0, "zero".to_string());
+        t1.insert(1, "one".to_string());
+        t1.insert(2, "two".to_string());
+
+        assert_ne!(t1, t2);
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(false, t2.contains_key(&0));
+        assert_eq!(false, t2.contains_key(&1));
+        assert_eq!(false, t2.contains_key(&2));
+
+        t2.insert(0, "zero".to_string());
+        t2.insert(1, "one".to_string());
+        t2.insert(2, "two".to_string());
+        assert_eq!(t1, t2);
+        assert_eq!(3, t1.len());
+        assert_eq!(3, t2.len());
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(true, t2.contains_key(&0));
+        assert_eq!(true, t2.contains_key(&1));
+        assert_eq!(true, t2.contains_key(&2));
+    }
+
+    #[test]
+    fn clone_and_eq_for_str() {
+        let mut t1 = Tree::new();
+        let mut t2 = t1.clone();
+        assert_eq!(t1, t2);
+
+        let zero_0 = "zero";
+        let one_0 = "one";
+        let two_0 = "two";
+
+        t1.insert(0, zero_0);
+        t1.insert(1, one_0);
+        t1.insert(2, two_0);
+
+        assert_ne!(t1, t2);
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(false, t2.contains_key(&0));
+        assert_eq!(false, t2.contains_key(&1));
+        assert_eq!(false, t2.contains_key(&2));
+
+        t2.insert(0, zero_0);
+        t2.insert(1, one_0);
+        t2.insert(2, two_0);
+        assert_eq!(t1, t2);
+        assert_eq!(3, t1.len());
+        assert_eq!(3, t2.len());
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(true, t2.contains_key(&0));
+        assert_eq!(true, t2.contains_key(&1));
+        assert_eq!(true, t2.contains_key(&2));
+
+        t2.clear();
+        let zero_1 = "zero";
+        let one_1 = "one";
+        let two_1 = "two";
+        t2.insert(0, zero_1);
+        t2.insert(1, one_1);
+        t2.insert(2, two_1);
+        assert_eq!(t1, t2);
     }
 
     #[test]
