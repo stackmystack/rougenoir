@@ -2,6 +2,137 @@ use std::{iter::FusedIterator, marker::PhantomData};
 
 use crate::{Callbacks, NodePtr, Tree};
 
+impl<K, V, C> Tree<K, V, C> {
+    /// Gets an iterator over the keys of the map, in sorted order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut a = Tree::new();
+    /// a.insert(2, "b");
+    /// a.insert(1, "a");
+    ///
+    /// let keys: Vec<_> = a.keys().cloned().collect();
+    /// assert_eq!(keys, [1, 2]);
+    /// ```
+    pub fn keys(&self) -> Keys<'_, K, V> {
+        Keys { inner: self.iter() }
+    }
+
+    pub fn iter(&self) -> Iter<K, V> {
+        Iter {
+            first: self.root.first(),
+            last: self.root.last(),
+            len: self.len,
+            _phantom_k: PhantomData,
+            _phantom_v: PhantomData,
+        }
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+        IterMut {
+            first: self.root.first(),
+            last: self.root.first(),
+            len: self.len,
+            _phantom_k: PhantomData,
+            _phantom_v: PhantomData,
+        }
+    }
+
+    /// Gets an iterator over the values of the map, in order by key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut a = Tree::new();
+    /// a.insert(1, "hello");
+    /// a.insert(2, "goodbye");
+    ///
+    /// let values: Vec<&str> = a.values().cloned().collect();
+    /// assert_eq!(values, ["hello", "goodbye"]);
+    /// ```
+    pub fn values(&self) -> Values<'_, K, V> {
+        Values { inner: self.iter() }
+    }
+
+    /// Gets a mutable iterator over the values of the map, in order by key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut a = Tree::new();
+    /// a.insert(1, String::from("hello"));
+    /// a.insert(2, String::from("goodbye"));
+    ///
+    /// for value in a.values_mut() {
+    ///     value.push_str("!");
+    /// }
+    ///
+    /// let values: Vec<String> = a.values().cloned().collect();
+    /// assert_eq!(values, [String::from("hello!"),
+    ///                     String::from("goodbye!")]);
+    /// ```
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
+        ValuesMut {
+            inner: self.iter_mut(),
+        }
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+    /// Creates a consuming iterator visiting all the keys, in sorted order.
+    /// The map cannot be used after calling this.
+    /// The iterator element type is `K`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut a = Tree::new();
+    /// a.insert(2, "b");
+    /// a.insert(1, "a");
+    ///
+    /// let keys: Vec<i32> = a.into_keys().collect();
+    /// assert_eq!(keys, [1, 2]);
+    /// ```
+    #[inline]
+    pub fn into_keys(self) -> IntoKeys<K, V, C> {
+        IntoKeys {
+            inner: self.into_iter(),
+        }
+    }
+
+    /// Creates a consuming iterator visiting all the values, in order by key.
+    /// The map cannot be used after calling this.
+    /// The iterator element type is `V`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut a = Tree::new();
+    /// a.insert(1, "hello");
+    /// a.insert(2, "goodbye");
+    ///
+    /// let values: Vec<&str> = a.into_values().collect();
+    /// assert_eq!(values, ["hello", "goodbye"]);
+    /// ```
+    #[inline]
+    pub fn into_values(self) -> IntoValues<K, V, C> {
+        IntoValues {
+            inner: self.into_iter(),
+        }
+    }
+}
+
 pub struct IntoIter<K, V, C>(Tree<K, V, C>);
 
 impl<K, V, C> IntoIter<K, V, C> {
@@ -238,28 +369,6 @@ impl<K, V> Clone for IterMut<'_, K, V> {
     }
 }
 
-impl<K, V, C> Tree<K, V, C> {
-    pub fn iter(&self) -> Iter<K, V> {
-        Iter {
-            first: self.root.first(),
-            last: self.root.last(),
-            len: self.len,
-            _phantom_k: PhantomData,
-            _phantom_v: PhantomData,
-        }
-    }
-
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
-        IterMut {
-            first: self.root.first(),
-            last: self.root.first(),
-            len: self.len,
-            _phantom_k: PhantomData,
-            _phantom_v: PhantomData,
-        }
-    }
-}
-
 impl<K: Ord, V, C: Callbacks<Key = K, Value = V>> Extend<(K, V)> for Tree<K, V, C> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
@@ -276,6 +385,255 @@ impl<'a, K: Ord + Copy, V: Copy, C: Callbacks<Key = K, Value = V>> Extend<(&'a K
         self.extend(iter.into_iter().map(|(&key, &value)| (key, value)));
     }
 }
+
+/// An iterator over the keys of a `Tree`.
+///
+/// This `struct` is created by the [`keys`] method on [`Tree`]. See its
+/// documentation for more.
+///
+/// [`keys`]: Tree::keys
+#[must_use = "iterators are lazy and do nothing unless consumed"]
+pub struct Keys<'a, K, V> {
+    inner: Iter<'a, K, V>,
+}
+
+/// An iterator over the values of a `Tree`.
+///
+/// This `struct` is created by the [`values`] method on [`Tree`]. See its
+/// documentation for more.
+///
+/// [`values`]: Tree::values
+#[must_use = "iterators are lazy and do nothing unless consumed"]
+pub struct Values<'a, K, V> {
+    inner: Iter<'a, K, V>,
+}
+
+/// A mutable iterator over the values of a `Tree`.
+///
+/// This `struct` is created by the [`values_mut`] method on [`Tree`]. See its
+/// documentation for more.
+///
+/// [`values_mut`]: Tree::values_mut
+#[must_use = "iterators are lazy and do nothing unless consumed"]
+pub struct ValuesMut<'a, K, V> {
+    inner: IterMut<'a, K, V>,
+}
+
+/// An owning iterator over the keys of a `Tree`.
+///
+/// This `struct` is created by the [`into_keys`] method on [`Tree`].
+/// See its documentation for more.
+///
+/// [`into_keys`]: Tree::into_keys
+#[must_use = "iterators are lazy and do nothing unless consumed"]
+pub struct IntoKeys<K, V, C: Callbacks<Key = K, Value = V>> {
+    inner: IntoIter<K, V, C>,
+}
+
+/// An owning iterator over the values of a `Tree`.
+///
+/// This `struct` is created by the [`into_values`] method on [`Tree`].
+/// See its documentation for more.
+///
+/// [`into_values`]: Tree::into_keys
+#[must_use = "iterators are lazy and do nothing unless consumed"]
+pub struct IntoValues<K, V, C: Callbacks<Key = K, Value = V>> {
+    inner: IntoIter<K, V, C>,
+}
+
+impl<'a, K, V> Iterator for Keys<'a, K, V> {
+    type Item = &'a K;
+
+    fn next(&mut self) -> Option<&'a K> {
+        self.inner.next().map(|(k, _)| k)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+
+    fn last(mut self) -> Option<&'a K> {
+        self.next_back()
+    }
+
+    fn min(mut self) -> Option<&'a K>
+    where
+        &'a K: Ord,
+    {
+        self.next()
+    }
+
+    fn max(mut self) -> Option<&'a K>
+    where
+        &'a K: Ord,
+    {
+        self.next_back()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for Keys<'a, K, V> {
+    fn next_back(&mut self) -> Option<&'a K> {
+        self.inner.next_back().map(|(k, _)| k)
+    }
+}
+
+impl<K, V> ExactSizeIterator for Keys<'_, K, V> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<K, V> FusedIterator for Keys<'_, K, V> {}
+
+impl<K, V> Clone for Keys<'_, K, V> {
+    fn clone(&self) -> Self {
+        Keys {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<'a, K, V> Iterator for Values<'a, K, V> {
+    type Item = &'a V;
+
+    fn next(&mut self) -> Option<&'a V> {
+        self.inner.next().map(|(_, v)| v)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+
+    fn last(mut self) -> Option<&'a V> {
+        self.next_back()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for Values<'a, K, V> {
+    fn next_back(&mut self) -> Option<&'a V> {
+        self.inner.next_back().map(|(_, v)| v)
+    }
+}
+
+impl<K, V> ExactSizeIterator for Values<'_, K, V> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<K, V> FusedIterator for Values<'_, K, V> {}
+
+impl<K, V> Clone for Values<'_, K, V> {
+    fn clone(&self) -> Self {
+        Values {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
+    type Item = &'a mut V;
+
+    fn next(&mut self) -> Option<&'a mut V> {
+        self.inner.next().map(|(_, v)| v)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+
+    fn last(mut self) -> Option<&'a mut V> {
+        self.next_back()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for ValuesMut<'a, K, V> {
+    fn next_back(&mut self) -> Option<&'a mut V> {
+        self.inner.next_back().map(|(_, v)| v)
+    }
+}
+
+impl<K, V> ExactSizeIterator for ValuesMut<'_, K, V> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<K, V> FusedIterator for ValuesMut<'_, K, V> {}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> Iterator for IntoKeys<K, V, C> {
+    type Item = K;
+
+    fn next(&mut self) -> Option<K> {
+        self.inner.next().map(|(k, _)| k)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+
+    fn last(mut self) -> Option<K> {
+        self.next_back()
+    }
+
+    fn min(mut self) -> Option<K>
+    where
+        K: Ord,
+    {
+        self.next()
+    }
+
+    fn max(mut self) -> Option<K>
+    where
+        K: Ord,
+    {
+        self.next_back()
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> DoubleEndedIterator for IntoKeys<K, V, C> {
+    fn next_back(&mut self) -> Option<K> {
+        self.inner.next_back().map(|(k, _)| k)
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> ExactSizeIterator for IntoKeys<K, V, C> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> FusedIterator for IntoKeys<K, V, C> {}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> Iterator for IntoValues<K, V, C> {
+    type Item = V;
+
+    fn next(&mut self) -> Option<V> {
+        self.inner.next().map(|(_, v)| v)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+
+    fn last(mut self) -> Option<V> {
+        self.next_back()
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> DoubleEndedIterator for IntoValues<K, V, C> {
+    fn next_back(&mut self) -> Option<V> {
+        self.inner.next_back().map(|(_, v)| v)
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> ExactSizeIterator for IntoValues<K, V, C> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> FusedIterator for IntoValues<K, V, C> {}
 
 #[cfg(test)]
 mod test {
