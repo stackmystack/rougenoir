@@ -86,6 +86,46 @@ impl<K, V, C> Tree<K, V, C> {
 }
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+    /// Creates an iterator that visits all elements (key-value pairs) in
+    /// ascending key order and uses a closure to determine if an element should
+    /// be removed. If the closure returns `true`, the element is removed from
+    /// the map and yielded. If the closure returns `false`, or panics, the
+    /// element remains in the map and will not be yielded.
+    ///
+    /// The iterator also lets you mutate the value of each element in the
+    /// closure, regardless of whether you choose to keep or remove it.
+    ///
+    /// If the returned `ExtractIf` is not exhausted, e.g. because it is dropped without iterating
+    /// or the iteration short-circuits, then the remaining elements will be retained.
+    /// Use [`retain`] with a negated predicate if you do not need the returned iterator.
+    ///
+    /// [`retain`]: Tree::retain
+    ///
+    /// # Examples
+    ///
+    /// Splitting a map into even and odd keys, reusing the original map:
+    ///
+    /// ```
+    /// use rougenoir::{Noop, Tree};
+    ///
+    /// let mut map: Tree<i32, i32, Noop<i32, i32>> = (0..8).map(|x| (x, x)).collect();
+    /// let evens: Tree<i32, i32, Noop<i32, i32>> = map.extract_if(|k, _v| k % 2 == 0).collect();
+    /// let odds = map;
+    /// assert_eq!(evens.keys().copied().collect::<Vec<_>>(), [0, 2, 4, 6]);
+    /// assert_eq!(odds.keys().copied().collect::<Vec<_>>(), [1, 3, 5, 7]);
+    /// ```
+    pub fn extract_if<F>(&mut self, pred: F) -> ExtractIf<'_, K, V, C, F>
+    where
+        K: Ord,
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        ExtractIf {
+            pred,
+            next: self.root.first(),
+            tree: self,
+        }
+    }
+
     /// Creates a consuming iterator visiting all the keys, in sorted order.
     /// The map cannot be used after calling this.
     /// The iterator element type is `K`.
@@ -130,6 +170,30 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         IntoValues {
             inner: self.into_iter(),
         }
+    }
+
+    /// Retains only the elements specified by the predicate.
+    ///
+    /// In other words, remove all pairs `(k, v)` for which `f(&k, &mut v)` returns `false`.
+    /// The elements are visited in ascending key order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::{Noop, Tree};
+    ///
+    /// let mut map: Tree<i32, i32, Noop<i32, i32>> = (0..8).map(|x| (x, x*10)).collect();
+    /// // Keep only the elements with even-numbered keys.
+    /// map.retain(|&k, _| k % 2 == 0);
+    /// assert!(map.into_iter().eq(vec![(0, 0), (2, 20), (4, 40), (6, 60)]));
+    /// ```
+    #[inline]
+    pub fn retain<F>(&mut self, mut f: F)
+    where
+        K: Ord,
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        self.extract_if(|k, v| !f(k, v)).for_each(drop);
     }
 }
 
@@ -635,6 +699,54 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> ExactSizeIterator for IntoValues<K,
 }
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> FusedIterator for IntoValues<K, V, C> {}
+
+impl<K: Ord, V, C: Callbacks<Key = K, Value = V> + Default> FromIterator<(K, V)> for Tree<K, V, C> {
+    /// Constructs a `Tree<K, V>` from an iterator of key-value pairs.
+    ///
+    /// If the iterator produces any pairs with equal keys,
+    /// all but one of the corresponding values will be dropped.
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Tree<K, V, C> {
+        let inputs: Vec<_> = iter.into_iter().collect();
+        if inputs.is_empty() {
+            return Tree::with_callbacks(Default::default());
+        }
+        let mut res = Tree::with_callbacks(Default::default());
+        for (k, v) in inputs {
+            res.insert(k, v);
+        }
+        res
+    }
+}
+
+pub struct ExtractIf<'a, K, V, C, F>
+where
+    C: Callbacks<Key = K, Value = V>,
+    F: 'a + FnMut(&K, &mut V) -> bool,
+{
+    pred: F,
+    tree: &'a mut Tree<K, V, C>,
+    next: NodePtr<K, V>,
+}
+
+impl<'a, K, V, C, F> Iterator for ExtractIf<'a, K, V, C, F>
+where
+    K: Ord,
+    C: Callbacks<Key = K, Value = V>,
+    F: 'a + FnMut(&K, &mut V) -> bool,
+{
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<(K, V)> {
+        while let Some(mut next_ref) = self.next {
+            let next_ref = unsafe { next_ref.as_mut() };
+            self.next = next_ref.next();
+            if (self.pred)(&next_ref.key, &mut next_ref.value) {
+                return self.tree.remove(&next_ref.key);
+            }
+        }
+        None
+    }
+}
 
 #[cfg(test)]
 mod test {

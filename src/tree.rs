@@ -71,12 +71,12 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
         (first_node.key, first_node.value)
     }
 
-    pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
+    pub fn remove<Q>(&mut self, key: &Q) -> Option<(K, V)>
     where
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,
     {
-        Some(self.pop_node(self.find_node(key)?).1)
+        Some(self.pop_node(self.find_node(key)?))
     }
 }
 
@@ -681,7 +681,7 @@ mod test {
         let forty_two = "forty two".to_string();
         tree.insert(42, forty_two.clone());
         res = tree.remove(&42);
-        assert_eq!(Some(forty_two.clone()), res);
+        assert_eq!(Some((42, forty_two.clone())), res);
         assert_eq!(0, tree.len());
         assert_eq!(false, tree.contains_key(&42));
 
@@ -692,21 +692,21 @@ mod test {
         tree.insert(100, hundo.clone());
 
         res = tree.remove(&42);
-        assert_eq!(Some(forty_two.clone()), res);
+        assert_eq!(Some((42, forty_two.clone())), res);
         assert_eq!(2, tree.len());
         assert_eq!(true, tree.contains_key(&0));
         assert_eq!(false, tree.contains_key(&42));
         assert_eq!(true, tree.contains_key(&100));
 
         res = tree.remove(&0);
-        assert_eq!(Some(zero.clone()), res);
+        assert_eq!(Some((0, zero.clone())), res);
         assert_eq!(1, tree.len());
         assert_eq!(false, tree.contains_key(&0));
         assert_eq!(false, tree.contains_key(&42));
         assert_eq!(true, tree.contains_key(&100));
 
         res = tree.remove(&100);
-        assert_eq!(Some(hundo.clone()), res);
+        assert_eq!(Some((100, hundo.clone())), res);
         assert_eq!(0, tree.len());
         assert_eq!(false, tree.contains_key(&0));
         assert_eq!(false, tree.contains_key(&42));
