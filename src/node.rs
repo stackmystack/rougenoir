@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use std::{fmt::Debug, ptr::NonNull};
 
 use super::{Color, Node, NodePtr, NodePtrExt};
 
@@ -177,5 +177,20 @@ impl<K, V> Node<K, V> {
             }
         }
         Some(parent.into())
+    }
+}
+
+impl<K, V> Debug for Node<K, V>
+where
+    K: Debug,
+    V: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{:?}::({:?},{:?})",
+            self.color(),
+            self.key,
+            self.value
+        ))
     }
 }

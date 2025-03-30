@@ -149,7 +149,7 @@ impl<K, V> From<&mut Node<K, V>> for NodePtr<K, V> {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Node<K, V> {
     // The parent pointer with color information in the lowest bit
     pub(crate) parent_color: usize,
@@ -218,7 +218,6 @@ pub struct Root<K, V, C> {
     pub(crate) root: NodePtr<K, V>,
 }
 
-#[derive(Debug)]
 pub struct Tree<K, V, C> {
     len: usize,
     root: Root<K, V, C>,

@@ -1,6 +1,7 @@
 use std::{
     borrow::Borrow,
     cmp::Ordering::{self, *},
+    fmt::Debug,
     mem,
     ops::Index,
     ptr::NonNull,
@@ -212,6 +213,17 @@ impl<K, V, C> Drop for Tree<K, V, C> {
             }
             let _ = unsafe { Box::from_raw(current.as_ptr()) };
         }
+    }
+}
+
+impl<K, V, C> Debug for Tree<K, V, C>
+where
+    K: Debug,
+    V: Debug,
+    C: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
