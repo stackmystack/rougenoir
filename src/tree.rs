@@ -26,30 +26,30 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     where
         K: Ord,
     {
-        let mut link = &mut self.root.root;
-        if link.is_none() {
-            let mut node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
-            node.set_parent_color(Color::Black as usize);
-            self.root.root = node;
+        let mut current_node = &mut self.root.root;
+        if current_node.is_none() {
+            let mut root_node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
+            root_node.set_parent_color(Color::Black as usize);
+            *current_node = root_node;
             self.len += 1;
             return None;
         }
 
-        let mut parent = link.unwrap().as_ptr();
-        while let Some(mut candidate) = *link {
-            parent = link.unwrap().as_ptr();
-            let candidate = unsafe { candidate.as_mut() };
-            match key.cmp(&candidate.key) {
+        let mut parent = current_node.unwrap().as_ptr();
+        while let Some(mut current_ptr) = *current_node {
+            parent = current_ptr.as_ptr();
+            let current = unsafe { current_ptr.as_mut() };
+            match key.cmp(&current.key) {
                 Equal => {
-                    return Some(std::mem::replace(&mut candidate.value, value));
+                    return Some(std::mem::replace(&mut current.value, value));
                 }
-                Greater => link = &mut candidate.right,
-                Less => link = &mut candidate.left,
+                Greater => current_node = &mut current.right,
+                Less => current_node = &mut current.left,
             }
         }
 
         let mut node = Box::new(Node::new(key, value));
-        node.link(NonNull::new(parent).unwrap(), link);
+        node.link(NonNull::new(parent).unwrap(), current_node);
         let node = NonNull::new(Box::into_raw(node));
         self.root.insert(node.expect("cannot be null"));
         self.len += 1;
@@ -535,6 +535,19 @@ mod test {
         res = tree.insert(42, "42".to_string());
         assert_eq!(Some(forty_two), res);
         assert_eq!(1, tree.len());
+    }
+
+    #[test]
+    fn odd_even() {
+        let mut tree = Tree::new();
+        for i in 0..10 {
+            tree.insert(i, i);
+        }
+        for i in (0..10).filter(|i| i % 2 == 0) {
+            tree.remove(&i);
+        }
+        assert_eq!(5, tree.len());
+        assert_eq!(vec![1, 3, 5, 7, 9], tree.into_keys().collect::<Vec<_>>());
     }
 
     #[test]

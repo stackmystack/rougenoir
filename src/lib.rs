@@ -44,6 +44,7 @@ pub(crate) trait NodePtrExt {
     fn ptr_value(&self) -> usize;
     fn red_parent(&self) -> NodePtr<Self::Key, Self::Value>;
     fn right(&self) -> NodePtr<Self::Key, Self::Value>;
+    fn set_color(&mut self, color: Color);
     fn set_left(&mut self, left: NodePtr<Self::Key, Self::Value>);
     fn set_parent(&mut self, parent: NodePtr<Self::Key, Self::Value>);
     fn set_parent_and_color(&mut self, parent: NodePtr<Self::Key, Self::Value>, color: Color);
@@ -83,6 +84,13 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     #[inline(always)]
     fn red_parent(&self) -> NodePtr<Self::Key, Self::Value> {
         self.map_or(None, |v| unsafe { v.as_ref().red_parent() })
+    }
+
+    #[inline(always)]
+    fn set_color(&mut self, color: Color) {
+        if let Some(node) = self {
+            unsafe { node.as_mut() }.set_color(color);
+        }
     }
 
     #[inline(always)]

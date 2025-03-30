@@ -100,7 +100,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp = node.left();
                     parent.set_right(tmp);
                     node.set_left(parent);
-                    tmp.set_parent_and_color(parent, Color::Black);
+                    if tmp.is_some() {
+                        tmp.set_parent_and_color(parent, Color::Black);
+                    }
                     parent.set_parent_and_color(node, Color::Red);
                     self.callbacks.rotate(parent, node);
                     parent = node;
@@ -119,7 +121,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                  */
                 gparent.set_left(tmp); /* == parent->rb_right */
                 parent.set_right(gparent);
-                tmp.set_parent_and_color(gparent, Color::Black);
+                if tmp.is_some() {
+                    tmp.set_parent_and_color(gparent, Color::Black);
+                }
                 self.rotate_set_parents(gparent, parent, Color::Red);
                 self.callbacks.rotate(gparent, parent);
                 break;
@@ -141,7 +145,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp = node.right();
                     parent.set_left(tmp);
                     node.set_right(parent);
-                    tmp.set_parent_and_color(parent, Color::Black);
+                    if tmp.is_some() {
+                        tmp.set_parent_and_color(parent, Color::Black);
+                    }
                     parent.set_parent_and_color(node, Color::Red);
                     self.callbacks.rotate(parent, node);
                     parent = node;
@@ -151,7 +157,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 /* Case 3 - left rotate at gparent */
                 gparent.set_right(tmp); /* == parent->rb_left */
                 parent.set_left(gparent);
-                tmp.set_parent_and_color(gparent, Color::Black);
+                if tmp.is_some() {
+                    tmp.set_parent_and_color(gparent, Color::Black);
+                }
                 self.rotate_set_parents(gparent, parent, Color::Red);
                 self.callbacks.rotate(gparent, parent);
                 break;
@@ -204,7 +212,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
         let mut tmp = node.left;
         let mut parent;
         let rebalance;
-        let pc: usize;
+        let pc;
 
         if tmp.is_none() {
             /*
@@ -215,7 +223,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
              * so as to bypass __rb_erase_color() later on.
              */
             pc = node.parent_color;
-            parent = Node::from_color(pc);
+            parent = Node::from_parent_color(pc);
             self.change_child(node.into(), child, parent);
             rebalance = if child.is_some() {
                 child.set_parent_color(pc);
@@ -230,7 +238,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
             /* Still case 1, but this time the child is node->rb_left */
             pc = node.parent_color;
             tmp.set_parent_color(pc);
-            parent = Node::from_color(pc);
+            parent = Node::from_parent_color(pc);
             self.change_child(node.into(), tmp, parent);
             rebalance = None;
             tmp = parent;
@@ -289,7 +297,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
             tmp.set_parent(successor);
 
             pc = node.parent_color;
-            tmp = Node::from_color(pc);
+            tmp = Node::from_parent_color(pc);
             self.change_child(node.into(), successor, tmp);
             rebalance = if child2.is_some() {
                 child2.set_parent_and_color(parent, Color::Black);
@@ -340,7 +348,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     parent.set_right(tmp1);
                     sibling.set_left(parent);
                     tmp1.set_parent_and_color(parent, Color::Black);
-                    self.rotate_set_parents(tmp1, parent, Color::Red);
+                    self.rotate_set_parents(parent, sibling, Color::Red);
                     self.callbacks.rotate(parent, sibling);
                     sibling = tmp1;
                 }
@@ -365,9 +373,11 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                          */
                         sibling.set_parent_and_color(parent, Color::Red);
                         if parent.is_red() {
+                            parent.set_color(Color::Black);
+                        } else {
                             node = parent;
-                            if parent.parent().is_some() {
-                                parent = parent.parent();
+                            parent = parent.parent();
+                            if parent.is_some() {
                                 continue;
                             }
                         }
@@ -400,10 +410,13 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                      *         \
                      *          sr
                      */
-                    tmp1 = sibling.right();
+                    tmp1 = tmp2.right();
                     sibling.set_left(tmp1);
                     tmp2.set_right(sibling);
-                    tmp1.set_parent_and_color(parent, Color::Black);
+                    parent.set_right(tmp2);
+                    if tmp1.is_some() {
+                        tmp1.set_parent_and_color(sibling, Color::Black);
+                    }
                     self.callbacks.rotate(sibling, tmp2);
                     tmp1 = sibling;
                     sibling = tmp2;
@@ -424,7 +437,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 parent.set_right(tmp2);
                 sibling.set_left(parent);
                 tmp1.set_parent_and_color(parent, Color::Black);
-                tmp2.set_parent_and_color(tmp1, Color::Black);
+                if tmp2.is_some() {
+                    tmp2.set_parent(parent);
+                }
                 self.rotate_set_parents(parent, sibling, Color::Black);
                 self.callbacks.rotate(parent, sibling);
                 break;
@@ -447,11 +462,11 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                         /* Case 2 - sibling color flip */
                         sibling.set_parent_and_color(parent, Color::Red);
                         if parent.is_red() {
-                            parent.set_parent_and_color(sibling, Color::Black);
+                            parent.set_color(Color::Black);
                         } else {
                             node = parent;
                             parent = node.parent();
-                            if parent.parent().is_some() {
+                            if parent.is_some() {
                                 continue;
                             }
                         }
@@ -462,7 +477,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                     sibling.set_right(tmp1);
                     tmp2.set_left(sibling);
                     parent.set_left(tmp2);
-                    tmp1.set_parent_and_color(sibling, Color::Black);
+                    if tmp1.is_some() {
+                        tmp1.set_parent_and_color(sibling, Color::Black);
+                    }
                     self.callbacks.rotate(sibling, tmp2);
                     tmp1 = sibling;
                     sibling = tmp2;
@@ -472,9 +489,12 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 parent.set_left(tmp2);
                 sibling.set_right(parent);
                 tmp1.set_parent_and_color(sibling, Color::Black);
-                tmp2.set_parent(parent);
+                if tmp2.is_some() {
+                    tmp2.set_parent(parent);
+                }
                 self.rotate_set_parents(parent, sibling, Color::Black);
                 self.callbacks.rotate(parent, sibling);
+                break;
             }
         }
     }

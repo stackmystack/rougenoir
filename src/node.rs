@@ -95,7 +95,7 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub(crate) fn from_color(parent_color: usize) -> NodePtr<K, V> {
+    pub(crate) fn from_parent_color(parent_color: usize) -> NodePtr<K, V> {
         NonNull::new((parent_color & !3) as *mut Node<K, V>)
     }
 
@@ -154,6 +154,11 @@ impl<K, V> Node<K, V> {
     #[inline(always)]
     pub(crate) fn set_parent_and_color(&mut self, parent: NodePtr<K, V>, color: Color) {
         self.parent_color = color as usize + parent.ptr_value();
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_color(&mut self, color: Color) {
+        self.parent_color = color as usize + self.parent().ptr_value();
     }
 
     #[allow(dead_code)]
