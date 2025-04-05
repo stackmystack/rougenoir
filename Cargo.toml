@@ -7,7 +7,9 @@ edition = "2024"
 
 [dev-dependencies]
 criterion = "0.5"
-pretty_assertions = "1.4"
+pretty_assertions = "1"
+quickcheck = "1"
+quickcheck_macros = "1"
 rand = "0.9"
 rand_chacha = "0.9"
 rbtree = "0.2"

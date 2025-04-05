@@ -216,6 +216,16 @@ impl<K, V, C> Drop for Tree<K, V, C> {
     }
 }
 
+#[cfg(debug_assertions)]
+impl<K, V, C> Tree<K, V, C>
+where
+    K: Debug,
+{
+    fn validate(&self) -> bool {
+        self.root.validate()
+    }
+}
+
 impl<K, V, C> Debug for Tree<K, V, C>
 where
     K: Debug,
@@ -297,10 +307,13 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::Noop;
-
     use super::*;
+    use crate::Noop;
     use pretty_assertions::{assert_eq, assert_ne};
+    use quickcheck_macros::quickcheck;
+    use rand::SeedableRng;
+    use rand::seq::SliceRandom;
+    use rand_chacha::ChaCha8Rng;
 
     #[test]
     fn clear() {
@@ -711,5 +724,40 @@ mod test {
         assert_eq!(false, tree.contains_key(&0));
         assert_eq!(false, tree.contains_key(&42));
         assert_eq!(false, tree.contains_key(&100));
+    }
+
+    #[quickcheck]
+    fn insertion_order_is_irrelevant(xs: Vec<(isize, ())>) -> bool {
+        let t1 = Tree::<isize, (), Noop<isize, ()>>::from_iter(xs.clone().into_iter());
+        let t2 = Tree::<isize, (), Noop<isize, ()>>::from_iter(xs.into_iter().rev());
+        t1 == t2
+    }
+
+    const TEST_SEED: u64 = 42;
+
+    fn rand_slice<I, T>(items: I, ratio: f64) -> Vec<T>
+    where
+        I: IntoIterator<Item = T> + ExactSizeIterator,
+    {
+        assert!(ratio > 0.0 && ratio <= 1.0);
+        let mut rng = ChaCha8Rng::seed_from_u64(TEST_SEED);
+        let len = items.len() as f64;
+        let mut selected = items.into_iter().collect::<Vec<_>>();
+        selected.shuffle(&mut rng);
+        selected.truncate((len * ratio).round().clamp(0.0, usize::MAX as f64) as usize);
+        selected
+    }
+
+    #[quickcheck]
+    fn remove_arbitrary(xs: Vec<(u8, ())>) -> bool {
+        let remove = rand_slice(xs.iter().map(|(k, _)| *k), 0.5);
+        let mut tree = Tree::<u8, (), Noop<u8, ()>>::from_iter(xs.into_iter());
+        for k in &remove {
+            tree.remove(k);
+        }
+        for k in remove {
+            assert_eq!(false, tree.contains_key(&k));
+        }
+        true
     }
 }

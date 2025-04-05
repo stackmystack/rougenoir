@@ -168,6 +168,79 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     }
 }
 
+#[cfg(debug_assertions)]
+impl<K, V, C> Root<K, V, C>
+where
+    K: std::fmt::Debug,
+{
+    pub(crate) fn validate(&self) -> bool {
+        let mut current = self.first();
+        let mut res = true;
+        while let Some(c) = current {
+            if c.as_ptr() == std::ptr::null_mut() {
+                println!("Node {:?} is null", c);
+                res = false;
+                break;
+            }
+            let c = unsafe { c.as_ref() };
+            println!("current node {:?}", c.key);
+            let left = c.left;
+            let right = c.right;
+            if left.is_some() {
+                if left.parent() != current {
+                    println!(
+                        "current({:?}) != left({:?}).parent; the parent is {:?}",
+                        c.key,
+                        left.and_then(|l| {
+                            if l.as_ptr() == std::ptr::null_mut() {
+                                None
+                            } else {
+                                Some(&unsafe { l.as_ref() }.key)
+                            }
+                        }),
+                        left.parent().and_then(|p| {
+                            if p.as_ptr() == std::ptr::null_mut() {
+                                None
+                            } else {
+                                Some(&unsafe { p.as_ref() }.key)
+                            }
+                        })
+                    );
+                    res = false;
+                }
+            }
+            if right.is_some() {
+                if right.parent() != current {
+                    println!(
+                        "current({:?}) != right({:?}).parent; the parent is {:?}",
+                        c.key,
+                        right.and_then(|r| {
+                            if r.as_ptr() == std::ptr::null_mut() {
+                                None
+                            } else {
+                                Some(&unsafe { r.as_ref() }.key)
+                            }
+                        }),
+                        right.parent().and_then(|p| {
+                            if p.as_ptr() == std::ptr::null_mut() {
+                                None
+                            } else {
+                                Some(&unsafe { p.as_ref() }.key)
+                            }
+                        })
+                    );
+                    res = false;
+                }
+            }
+            if res == false {
+                return false;
+            }
+            current = c.next();
+        }
+        return res;
+    }
+}
+
 impl<K, V, C> Root<K, V, C> {
     pub fn first(&self) -> NodePtr<K, V> {
         let mut n = self.root?;
@@ -436,7 +509,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
                 tmp2 = sibling.left();
                 parent.set_right(tmp2);
                 sibling.set_left(parent);
-                tmp1.set_parent_and_color(parent, Color::Black);
+                tmp1.set_parent_and_color(sibling, Color::Black);
                 if tmp2.is_some() {
                     tmp2.set_parent(parent);
                 }
