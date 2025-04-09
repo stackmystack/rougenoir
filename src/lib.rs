@@ -226,7 +226,7 @@ impl<K, V> Callbacks for Noop<K, V> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Root<K, V, C> {
     pub callbacks: C,
-    pub root: NodePtr<K, V>,
+    pub node: NodePtr<K, V>,
 }
 
 pub struct Tree<K, V, C> {

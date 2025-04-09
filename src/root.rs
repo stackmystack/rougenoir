@@ -12,7 +12,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Root<K, V, C>
 impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
     pub fn new(augmented: C) -> Self {
         Root {
-            root: None,
+            node: None,
             callbacks: augmented,
         }
     }
@@ -242,7 +242,7 @@ where
 
 impl<K, V, C> Root<K, V, C> {
     pub fn first(&self) -> NodePtr<K, V> {
-        let mut n = self.root?;
+        let mut n = self.node?;
         while let Some(left) = unsafe { n.as_ref() }.left {
             n = left;
         }
@@ -250,12 +250,12 @@ impl<K, V, C> Root<K, V, C> {
     }
 
     pub fn first_postorder(&self) -> NodePtr<K, V> {
-        let n = self.root?;
+        let n = self.node?;
         unsafe { n.as_ref() }.left_deepest_node()
     }
 
     pub fn last(&self) -> NodePtr<K, V> {
-        let mut n = self.root?;
+        let mut n = self.node?;
         while let Some(right) = unsafe { n.as_ref() }.right {
             n = right;
         }
@@ -582,7 +582,7 @@ impl<K, V, C> Root<K, V, C> {
                 parent.right = new;
             }
         } else {
-            self.root = new;
+            self.node = new;
         }
     }
 

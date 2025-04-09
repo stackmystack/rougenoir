@@ -14,7 +14,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
         drop(Tree {
             root: Root {
                 callbacks: mem::take(&mut self.root.callbacks),
-                root: mem::take(&mut self.root.root),
+                node: mem::take(&mut self.root.node),
             },
             len: mem::replace(&mut self.len, 0),
         });
@@ -26,7 +26,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     where
         K: Ord,
     {
-        let mut current_node = &mut self.root.root;
+        let mut current_node = &mut self.root.node;
         if current_node.is_none() {
             let mut root_node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
             root_node.set_parent_color(Color::Black as usize);
@@ -94,7 +94,7 @@ impl<K, V, C> Tree<K, V, C> {
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,
     {
-        let mut node = self.root.root;
+        let mut node = self.root.node;
         while let Some(candidate) = node {
             let candidate = unsafe { candidate.as_ref() };
             match key.cmp(candidate.key.borrow()) {
@@ -185,7 +185,7 @@ impl<K, V, C> Drop for Tree<K, V, C> {
             Left,
             Right,
         }
-        let mut parent = self.root.root;
+        let mut parent = self.root.node;
         let mut direction = Vec::new();
         // max depth = 2 × log₂(n+1)
         let log_val = (self.len + 1).checked_ilog2().unwrap_or(0) as usize;
@@ -263,7 +263,7 @@ where
                 len: 0,
                 root: Root {
                     callbacks: self.root.callbacks.clone(),
-                    root: None,
+                    node: None,
                 },
             };
             for (k, v) in self.iter() {
