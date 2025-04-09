@@ -29,7 +29,7 @@ impl From<usize> for Color {
 
 pub type NodePtr<K, V> = Option<NonNull<Node<K, V>>>;
 
-pub(crate) trait NodePtrExt {
+pub trait NodePtrExt {
     type Key;
     type Value;
 
@@ -159,13 +159,16 @@ impl<K, V> From<&mut Node<K, V>> for NodePtr<K, V> {
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq)]
 pub struct Node<K, V> {
-    // The parent pointer with color information in the lowest bit
+    /// The parent pointer with color information in the lowest bit
     pub(crate) parent_color: usize,
-    // Child pointers
-    pub(crate) right: NodePtr<K, V>,
-    pub(crate) left: NodePtr<K, V>,
-    key: K,
-    value: V,
+    /// Right Child
+    pub right: NodePtr<K, V>,
+    /// Left Child
+    pub left: NodePtr<K, V>,
+    /// Key
+    pub key: K,
+    /// Value
+    pub value: V,
 }
 
 pub trait Callbacks {
@@ -222,8 +225,8 @@ impl<K, V> Callbacks for Noop<K, V> {
 /// A is the Augmented Callback type.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Root<K, V, C> {
-    pub(crate) callbacks: C,
-    pub(crate) root: NodePtr<K, V>,
+    pub callbacks: C,
+    pub root: NodePtr<K, V>,
 }
 
 pub struct Tree<K, V, C> {
