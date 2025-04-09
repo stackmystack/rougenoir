@@ -1,4 +1,5 @@
-/// Translated from the linux kernel's implementation of red-black trees.
+///! A red-black (rouge-noir) tree translated from the linux kernel's implementation of red-black trees.
+mod cached_tree;
 mod iter;
 mod node;
 mod root;
@@ -258,6 +259,31 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C>
     }
 }
 
-// TODO: TreeCached
-// pub type RBTreeCached<K, V> = Tree<RootCached<K, V, DummyAugmenter<K, V>>>;
-// pub type RBTreeCachedAugmented<K, V, A> = Tree<RootCached<K, V, A>>;
+pub struct CachedTree<K, V, C> {
+    leftmost: NodePtr<K, V>,
+    tree: Tree<K, V, C>,
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
+    pub fn with_callbacks(augmented: C) -> Self {
+        CachedTree {
+            tree: Tree::with_callbacks(augmented),
+            leftmost: None,
+        }
+    }
+}
+
+impl<K, V> CachedTree<K, V, Noop<K, V>> {
+    pub fn new() -> Self {
+        CachedTree {
+            tree: Tree::new(),
+            leftmost: None,
+        }
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for CachedTree<K, V, C> {
+    fn default() -> Self {
+        Self::with_callbacks(C::default())
+    }
+}

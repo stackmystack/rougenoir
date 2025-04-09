@@ -26,34 +26,35 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     where
         K: Ord,
     {
-        let mut current_node = &mut self.root.node;
-        if current_node.is_none() {
-            let mut root_node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
-            root_node.set_parent_color(Color::Black as usize);
-            *current_node = root_node;
-            self.len += 1;
-            return None;
-        }
-
-        let mut parent = current_node.unwrap().as_ptr();
-        while let Some(mut current_ptr) = *current_node {
-            parent = current_ptr.as_ptr();
-            let current = unsafe { current_ptr.as_mut() };
-            match key.cmp(&current.key) {
-                Equal => {
-                    return Some(std::mem::replace(&mut current.value, value));
+        match self.root.node {
+            None => {
+                self.len += 1;
+                self.root.node = unsafe { alloc_node(key, value) };
+                None
+            }
+            Some(_) => {
+                let mut current_node = &mut self.root.node;
+                let mut parent = current_node.unwrap().as_ptr();
+                while let Some(mut current_ptr) = *current_node {
+                    parent = current_ptr.as_ptr();
+                    let current = unsafe { current_ptr.as_mut() };
+                    match key.cmp(&current.key) {
+                        Equal => {
+                            return Some(std::mem::replace(&mut current.value, value));
+                        }
+                        Greater => current_node = &mut current.right,
+                        Less => current_node = &mut current.left,
+                    }
                 }
-                Greater => current_node = &mut current.right,
-                Less => current_node = &mut current.left,
+
+                self.len += 1;
+                let mut node = Box::new(Node::new(key, value));
+                node.link(NonNull::new(parent).unwrap(), current_node);
+                let node = NonNull::new(Box::into_raw(node));
+                self.root.insert(node.expect("cannot be null"));
+                None
             }
         }
-
-        let mut node = Box::new(Node::new(key, value));
-        node.link(NonNull::new(parent).unwrap(), current_node);
-        let node = NonNull::new(Box::into_raw(node));
-        self.root.insert(node.expect("cannot be null"));
-        self.len += 1;
-        None
     }
 
     pub fn pop_first(&mut self) -> Option<(K, V)> {
@@ -78,6 +79,18 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     {
         Some(self.pop_node(self.find_node(key)?))
     }
+}
+
+/// SAFETY: it leaks.
+/// If you choose to store the value, you need to make sure it has a
+/// lifetime identical to that of the
+pub unsafe fn alloc_node<K, V>(key: K, value: V) -> Option<NonNull<Node<K, V>>>
+where
+    K: Ord,
+{
+    let mut root_node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
+    root_node.set_parent_color(Color::Black as usize);
+    root_node
 }
 
 impl<K, V, C> Tree<K, V, C> {
