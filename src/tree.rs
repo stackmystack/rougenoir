@@ -246,7 +246,7 @@ impl<K, V, C> Drop for Tree<K, V, C> {
         // max depth = 2 × log₂(n+1)
         let log_val = (self.len + 1).checked_ilog2().unwrap_or(0) as usize;
         direction.reserve(log_val.checked_mul(2).unwrap_or(usize::MAX).max(4096));
-        while let Some(current) = parent {
+        while let Some(mut current) = parent {
             let current_ref = unsafe { current.as_ref() };
             if current_ref.left.is_some() {
                 parent = current_ref.left;
@@ -267,9 +267,14 @@ impl<K, V, C> Drop for Tree<K, V, C> {
                     _ => {}
                 }
             }
-            let _ = unsafe { Box::from_raw(current.as_ptr()) };
+            // SAFETY: Now it's safe to drop
+            unsafe { dealloc_node(current.as_mut()) };
         }
     }
+}
+
+pub unsafe fn dealloc_node<K, V>(current: *mut Node<K, V>) {
+    let _ = unsafe { Box::from_raw(current) };
 }
 
 #[cfg(debug_assertions)]
