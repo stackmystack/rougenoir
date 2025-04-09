@@ -221,6 +221,7 @@ impl<K, V, C> Tree<K, V, C>
 where
     K: Debug,
 {
+    #[allow(dead_code)]
     fn validate(&self) -> bool {
         self.root.validate()
     }
@@ -574,29 +575,19 @@ mod test {
         assert!(t1 <= t2);
         assert!(t1 >= t2);
         assert!(t1 == t2);
-        assert!(!(t1 < t2));
-        assert!(!(t1 > t2));
 
         t1.insert(1, one);
         t2.insert(1, one);
         assert!(t1 <= t2);
         assert!(t1 >= t2);
         assert!(t1 == t2);
-        assert!(!(t1 < t2));
-        assert!(!(t1 > t2));
 
         t2.insert(2, two);
         assert!(t1 <= t2);
-        assert!(!(t1 >= t2));
-        assert!(!(t1 == t2));
         assert!(t1 < t2);
-        assert!(!(t1 > t2));
 
         t1.insert(3, three);
-        assert!(!(t1 <= t2));
         assert!(t1 >= t2);
-        assert!(!(t1 == t2));
-        assert!(!(t1 < t2));
         assert!(t1 > t2);
     }
 

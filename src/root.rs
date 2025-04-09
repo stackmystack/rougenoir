@@ -173,11 +173,12 @@ impl<K, V, C> Root<K, V, C>
 where
     K: std::fmt::Debug,
 {
-    pub(crate) fn validate(&self) -> bool {
+    #[allow(useless_ptr_null_checks)]
+    pub fn validate(&self) -> bool {
         let mut current = self.first();
         let mut res = true;
         while let Some(c) = current {
-            if c.as_ptr() == std::ptr::null_mut() {
+            if c.as_ptr().is_null() {
                 println!("Node {:?} is null", c);
                 res = false;
                 break;
@@ -186,58 +187,56 @@ where
             println!("current node {:?}", c.key);
             let left = c.left;
             let right = c.right;
-            if left.is_some() {
-                if left.parent() != current {
-                    println!(
-                        "current({:?}) != left({:?}).parent; the parent is {:?}",
-                        c.key,
-                        left.and_then(|l| {
-                            if l.as_ptr() == std::ptr::null_mut() {
-                                None
-                            } else {
-                                Some(&unsafe { l.as_ref() }.key)
-                            }
-                        }),
-                        left.parent().and_then(|p| {
-                            if p.as_ptr() == std::ptr::null_mut() {
-                                None
-                            } else {
-                                Some(&unsafe { p.as_ref() }.key)
-                            }
-                        })
-                    );
-                    res = false;
-                }
+            if left.is_some() && left.parent() != current {
+                println!(
+                    "current({:?}) != left({:?}).parent; the parent is {:?}",
+                    c.key,
+                    left.and_then(|l| {
+                        if l.as_ptr().is_null() {
+                            None
+                        } else {
+                            Some(&unsafe { l.as_ref() }.key)
+                        }
+                    }),
+                    left.parent().and_then(|p| {
+                        if p.as_ptr().is_null() {
+                            None
+                        } else {
+                            Some(&unsafe { p.as_ref() }.key)
+                        }
+                    })
+                );
+                res = false;
             }
-            if right.is_some() {
-                if right.parent() != current {
-                    println!(
-                        "current({:?}) != right({:?}).parent; the parent is {:?}",
-                        c.key,
-                        right.and_then(|r| {
-                            if r.as_ptr() == std::ptr::null_mut() {
-                                None
-                            } else {
-                                Some(&unsafe { r.as_ref() }.key)
-                            }
-                        }),
-                        right.parent().and_then(|p| {
-                            if p.as_ptr() == std::ptr::null_mut() {
-                                None
-                            } else {
-                                Some(&unsafe { p.as_ref() }.key)
-                            }
-                        })
-                    );
-                    res = false;
-                }
+
+            if right.is_some() && right.parent() != current {
+                println!(
+                    "current({:?}) != right({:?}).parent; the parent is {:?}",
+                    c.key,
+                    right.and_then(|r| {
+                        if r.as_ptr().is_null() {
+                            None
+                        } else {
+                            Some(&unsafe { r.as_ref() }.key)
+                        }
+                    }),
+                    right.parent().and_then(|p| {
+                        if p.as_ptr().is_null() {
+                            None
+                        } else {
+                            Some(&unsafe { p.as_ref() }.key)
+                        }
+                    })
+                );
+                res = false;
             }
-            if res == false {
+            if !res {
                 return false;
             }
             current = c.next();
         }
-        return res;
+
+        res
     }
 }
 

@@ -58,12 +58,12 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
 
     #[inline(always)]
     fn is_black(&self) -> bool {
-        self.map_or(true, |v| unsafe { v.as_ref() }.is_black())
+        self.is_none_or(|v| unsafe { v.as_ref() }.is_black())
     }
 
     #[inline(always)]
     fn is_red(&self) -> bool {
-        self.map_or(false, |v| unsafe { v.as_ref() }.is_red())
+        self.is_some_and(|v| unsafe { v.as_ref() }.is_red())
     }
 
     #[inline(always)]
