@@ -1,4 +1,4 @@
-use crate::{CachedTree, Callbacks, Node};
+use crate::{CachedTree, Callbacks, Node, tree};
 
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> CachedTree<K, V, C> {
     pub fn clear(&mut self) {
@@ -12,7 +12,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     where
         K: Ord,
     {
-        // self.leftmost = self.tree.alloc_node(key, value);
+        self.leftmost = unsafe { tree::alloc_node(key, value) };
         todo!()
     }
 }

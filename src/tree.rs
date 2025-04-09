@@ -22,6 +22,49 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
 }
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+    pub fn insert_node_ptr(&mut self, node: NodePtr<K, V>)
+    where
+        K: Ord,
+    {
+        let mut node = node.expect("You're using it wrong. You can't insert a None");
+        match self.root.node {
+            None => {
+                self.len += 1;
+                self.root.node = Some(node);
+            }
+            Some(_) => {
+                let node = unsafe { node.as_mut() };
+                let mut current_node = &mut self.root.node;
+                let mut parent = current_node.unwrap().as_ptr();
+                let mut replace = None;
+                while let Some(mut current_ptr) = *current_node {
+                    parent = current_ptr.as_ptr();
+                    let current = unsafe { current_ptr.as_mut() };
+                    match node.key.cmp(&current.key) {
+                        Equal => {
+                            replace = Some(());
+                            break;
+                        }
+                        Greater => current_node = &mut current.right,
+                        Less => current_node = &mut current.left,
+                    }
+                }
+                match replace {
+                    Some(()) => {
+                        unsafe {
+                            std::ptr::copy(&mut node.value, &mut (*parent).value, size_of::<V>())
+                        };
+                    }
+                    None => {
+                        self.len += 1;
+                        node.link(NonNull::new(parent).unwrap(), current_node);
+                        self.root.insert(node.into());
+                    }
+                }
+            }
+        }
+    }
+
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
     where
         K: Ord,
