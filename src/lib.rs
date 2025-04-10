@@ -37,6 +37,11 @@ pub trait NodePtrExt {
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
     fn left(&self) -> NodePtr<Self::Key, Self::Value>;
+    fn link(
+        &mut self,
+        parent: NonNull<Node<Self::Key, Self::Value>>,
+        link: &mut NodePtr<Self::Key, Self::Value>,
+    ) -> usize;
     #[allow(dead_code)]
     fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn parent(&self) -> NodePtr<Self::Key, Self::Value>;
@@ -65,6 +70,15 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     #[inline(always)]
     fn is_red(&self) -> bool {
         self.is_some_and(|v| unsafe { v.as_ref() }.is_red())
+    }
+
+    #[inline(always)]
+    fn link(
+        &mut self,
+        parent: NonNull<Node<Self::Key, Self::Value>>,
+        link: &mut NodePtr<Self::Key, Self::Value>,
+    ) -> usize {
+        self.map_or(0, |mut v| unsafe { v.as_mut() }.link(parent, link))
     }
 
     #[inline(always)]

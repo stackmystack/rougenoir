@@ -77,9 +77,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
             }
             Some(_) => {
                 let mut current_node = &mut self.root.node;
-                let mut parent = current_node.unwrap().as_ptr();
+                let mut parent = current_node.unwrap();
                 while let Some(mut current_ptr) = *current_node {
-                    parent = current_ptr.as_ptr();
+                    parent = current_ptr;
                     let current = unsafe { current_ptr.as_mut() };
                     match key.cmp(&current.key) {
                         Equal => {
@@ -90,11 +90,10 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
                     }
                 }
 
+                let mut node = unsafe { alloc_node(key, value) };
+                node.link(parent, current_node);
+                self.root.insert(node.expect("can never be None"));
                 self.len += 1;
-                let mut node = Box::new(Node::new(key, value));
-                node.link(NonNull::new(parent).unwrap(), current_node);
-                let node = NonNull::new(Box::into_raw(node));
-                self.root.insert(node.expect("cannot be null"));
                 None
             }
         }
