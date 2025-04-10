@@ -151,24 +151,24 @@ impl<K, V, C> CachedTree<K, V, C> {
         })
     }
 
-    // pub fn is_empty(&self) -> bool {
-    //     self.len == 0
-    // }
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
 
-    // pub fn last(&self) -> Option<&V> {
-    //     self.root.last().map(|n| &unsafe { n.as_ref() }.value)
-    // }
+    pub fn last(&self) -> Option<&V> {
+        self.root.last().map(|n| &unsafe { n.as_ref() }.value)
+    }
 
-    // pub fn last_key_value(&self) -> Option<(&K, &V)> {
-    //     self.root.last().map(|n| {
-    //         let n = unsafe { n.as_ref() };
-    //         (&n.key, &n.value)
-    //     })
-    // }
+    pub fn last_key_value(&self) -> Option<(&K, &V)> {
+        self.root.last().map(|n| {
+            let n = unsafe { n.as_ref() };
+            (&n.key, &n.value)
+        })
+    }
 
-    // pub fn len(&self) -> usize {
-    //     self.len
-    // }
+    pub fn len(&self) -> usize {
+        self.len
+    }
 
     // TODO
     // fn retain<F>(&mut self, f: F)
