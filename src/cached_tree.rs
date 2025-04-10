@@ -121,16 +121,16 @@ impl<K, V, C> CachedTree<K, V, C> {
         node
     }
 
-    // pub fn first(&self) -> Option<&V> {
-    //     self.root.first().map(|e| &unsafe { e.as_ref() }.value)
-    // }
+    pub fn first(&self) -> Option<&V> {
+        self.leftmost.map(|e| &unsafe { e.as_ref() }.value)
+    }
 
-    // pub fn first_key_value(&self) -> Option<(&K, &V)> {
-    //     self.root.first().map(|n| {
-    //         let n = unsafe { n.as_ref() };
-    //         (&n.key, &n.value)
-    //     })
-    // }
+    pub fn first_key_value(&self) -> Option<(&K, &V)> {
+        self.leftmost.map(|n| {
+            let n = unsafe { n.as_ref() };
+            (&n.key, &n.value)
+        })
+    }
 
     // pub fn get<Q>(&self, key: &Q) -> Option<&V>
     // where
