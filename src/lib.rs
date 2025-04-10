@@ -301,3 +301,20 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for CachedTree<K,
         Self::with_callbacks(C::default())
     }
 }
+
+// Low-Level API, but still public.
+
+/// SAFETY: it leaks; use with dealloc_node.
+pub unsafe fn alloc_node<K, V>(key: K, value: V) -> Option<NonNull<Node<K, V>>>
+where
+    K: Ord,
+{
+    let mut root_node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
+    root_node.set_parent_color(Color::Black as usize);
+    root_node
+}
+
+/// SAFETY: it drops; use after alloc_node.
+pub unsafe fn dealloc_node<K, V>(current: *mut Node<K, V>) {
+    let _ = unsafe { Box::from_raw(current) };
+}
