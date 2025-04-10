@@ -275,14 +275,16 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C>
 
 pub struct CachedTree<K, V, C> {
     leftmost: NodePtr<K, V>,
-    tree: Tree<K, V, C>,
+    len: usize,
+    root: Root<K, V, C>,
 }
 
 impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     pub fn with_callbacks(augmented: C) -> Self {
         CachedTree {
-            tree: Tree::with_callbacks(augmented),
             leftmost: None,
+            len: 0,
+            root: Root::new(augmented),
         }
     }
 }
@@ -290,8 +292,9 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
 impl<K, V> CachedTree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
         CachedTree {
-            tree: Tree::new(),
             leftmost: None,
+            len: 0,
+            root: Root::new(Noop::new()),
         }
     }
 }
@@ -301,8 +304,6 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for CachedTree<K,
         Self::with_callbacks(C::default())
     }
 }
-
-// Low-Level API, but still public.
 
 /// SAFETY: it leaks; use with dealloc_node.
 pub unsafe fn alloc_node<K, V>(key: K, value: V) -> Option<NonNull<Node<K, V>>>

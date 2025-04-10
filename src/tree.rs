@@ -12,11 +12,11 @@ use crate::{Callbacks, Node, NodePtr, NodePtrExt, Root, Tree, alloc_node, deallo
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
     pub fn clear(&mut self) {
         drop(Tree {
+            len: mem::replace(&mut self.len, 0),
             root: Root {
                 callbacks: mem::take(&mut self.root.callbacks),
                 node: mem::take(&mut self.root.node),
             },
-            len: mem::replace(&mut self.len, 0),
         });
     }
 }
@@ -28,8 +28,8 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     {
         match self.root.node {
             None => {
-                self.len += 1;
                 self.root.node = unsafe { alloc_node(key, value) };
+                self.len += 1;
                 None
             }
             Some(_) => {
@@ -181,7 +181,7 @@ where
 
 impl<K, V, C> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
-        enum Direction {
+        enum ComingFrom {
             Left,
             Right,
         }
@@ -194,20 +194,20 @@ impl<K, V, C> Drop for Tree<K, V, C> {
             let current_ref = unsafe { current.as_ref() };
             if current_ref.left.is_some() {
                 parent = current_ref.left;
-                direction.push(Direction::Left);
+                direction.push(ComingFrom::Left);
                 continue;
             }
             if current_ref.right.is_some() {
                 parent = current_ref.right;
-                direction.push(Direction::Right);
+                direction.push(ComingFrom::Right);
                 continue;
             }
             parent = current_ref.parent();
             // drop; don't call rbtree erase => needless overhead.
             if parent.is_some() {
                 match direction.pop() {
-                    Some(Direction::Left) => unsafe { parent.unwrap().as_mut() }.left = None,
-                    Some(Direction::Right) => unsafe { parent.unwrap().as_mut() }.right = None,
+                    Some(ComingFrom::Left) => unsafe { parent.unwrap().as_mut() }.left = None,
+                    Some(ComingFrom::Right) => unsafe { parent.unwrap().as_mut() }.right = None,
                     _ => {}
                 }
             }
