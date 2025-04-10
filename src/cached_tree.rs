@@ -132,24 +132,24 @@ impl<K, V, C> CachedTree<K, V, C> {
         })
     }
 
-    // pub fn get<Q>(&self, key: &Q) -> Option<&V>
-    // where
-    //     K: Borrow<Q> + Ord,
-    //     Q: Ord + ?Sized,
-    // {
-    //     self.find_node(key).map(|n| &unsafe { n.as_ref() }.value)
-    // }
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
+    where
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
+    {
+        self.find_node(key).map(|n| &unsafe { n.as_ref() }.value)
+    }
 
-    // pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
-    // where
-    //     K: Borrow<Q> + Ord,
-    //     Q: Ord,
-    // {
-    //     self.find_node(key).map(|n| {
-    //         let n = unsafe { n.as_ref() };
-    //         (&n.key, &n.value)
-    //     })
-    // }
+    pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
+    where
+        K: Borrow<Q> + Ord,
+        Q: Ord,
+    {
+        self.find_node(key).map(|n| {
+            let n = unsafe { n.as_ref() };
+            (&n.key, &n.value)
+        })
+    }
 
     // pub fn is_empty(&self) -> bool {
     //     self.len == 0
