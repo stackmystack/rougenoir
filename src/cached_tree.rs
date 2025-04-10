@@ -1,6 +1,6 @@
-use std::{cmp::Ordering::*, mem};
+use std::{cmp::Ordering::*, mem, ptr::NonNull};
 
-use crate::{CachedTree, Callbacks, NodePtrExt, Root, alloc_node};
+use crate::{CachedTree, Callbacks, Node, NodePtrExt, Root, alloc_node};
 
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> CachedTree<K, V, C> {
     pub fn clear(&mut self) {
@@ -57,6 +57,35 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
             }
         }
     }
+
+    pub fn pop_first(&mut self) -> Option<(K, V)>
+    where
+        K: PartialEq,
+    {
+        Some(self.pop_node(self.root.first()?))
+    }
+
+    pub fn pop_last(&mut self) -> Option<(K, V)> {
+        Some(self.pop_node(self.root.last()?))
+    }
+
+    fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> (K, V) {
+        self.root.erase(node);
+        if self.leftmost.is_some_and(|l| l == node) {
+            self.leftmost = unsafe { node.as_ref() }.next();
+        }
+        let first_node = unsafe { Box::from_raw(node.as_ptr()) };
+        self.len -= 1;
+        (first_node.key, first_node.value)
+    }
+
+    // pub fn remove<Q>(&mut self, key: &Q) -> Option<(K, V)>
+    // where
+    //     K: Borrow<Q> + Ord,
+    //     Q: Ord + ?Sized,
+    // {
+    //     Some(self.pop_node(self.find_node(key)?))
+    // }
 }
 
 // impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for RootCached<K, V, A> {
