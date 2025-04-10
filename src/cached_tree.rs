@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, cmp::Ordering::*, mem, ptr::NonNull};
+use std::{borrow::Borrow, cmp::Ordering::*, mem, ops::Index, ptr::NonNull};
 
 use crate::{CachedTree, Callbacks, Node, NodePtr, NodePtrExt, Root, alloc_node};
 
@@ -174,4 +174,22 @@ impl<K, V, C> CachedTree<K, V, C> {
     // fn retain<F>(&mut self, f: F)
     // where
     //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
+}
+
+impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for CachedTree<K, V, C>
+where
+    K: Borrow<Q> + Ord,
+    Q: Ord,
+{
+    type Output = V;
+
+    /// Returns a reference to the value corresponding to the supplied key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the key is not present in the `Tree`.
+    #[inline]
+    fn index(&self, key: &Q) -> &V {
+        self.get(key).expect("no entry found for key")
+    }
 }
