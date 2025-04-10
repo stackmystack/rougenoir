@@ -1,6 +1,6 @@
-use std::{cmp::Ordering::*, mem, ptr::NonNull};
+use std::{borrow::Borrow, cmp::Ordering::*, mem, ptr::NonNull};
 
-use crate::{CachedTree, Callbacks, Node, NodePtrExt, Root, alloc_node};
+use crate::{CachedTree, Callbacks, Node, NodePtr, NodePtrExt, Root, alloc_node};
 
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> CachedTree<K, V, C> {
     pub fn clear(&mut self) {
@@ -79,59 +79,99 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
         (first_node.key, first_node.value)
     }
 
-    // pub fn remove<Q>(&mut self, key: &Q) -> Option<(K, V)>
+    pub fn remove<Q>(&mut self, key: &Q) -> Option<(K, V)>
+    where
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
+    {
+        Some(self.pop_node(self.find_node(key)?))
+    }
+}
+
+impl<K, V, C> CachedTree<K, V, C> {
+    pub fn contains_key<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
+    {
+        self.find_node(key).is_some()
+    }
+
+    fn find_node<Q>(&self, key: &Q) -> NodePtr<K, V>
+    where
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
+    {
+        if self
+            .leftmost
+            .is_some_and(|l| unsafe { l.as_ref() }.key.borrow() == key)
+        {
+            return self.leftmost;
+        }
+
+        let mut node = self.root.node;
+        while let Some(candidate) = node {
+            let candidate = unsafe { candidate.as_ref() };
+            match key.cmp(candidate.key.borrow()) {
+                Equal => break,
+                Greater => node = candidate.right,
+                Less => node = candidate.left,
+            }
+        }
+        node
+    }
+
+    // pub fn first(&self) -> Option<&V> {
+    //     self.root.first().map(|e| &unsafe { e.as_ref() }.value)
+    // }
+
+    // pub fn first_key_value(&self) -> Option<(&K, &V)> {
+    //     self.root.first().map(|n| {
+    //         let n = unsafe { n.as_ref() };
+    //         (&n.key, &n.value)
+    //     })
+    // }
+
+    // pub fn get<Q>(&self, key: &Q) -> Option<&V>
     // where
     //     K: Borrow<Q> + Ord,
     //     Q: Ord + ?Sized,
     // {
-    //     Some(self.pop_node(self.find_node(key)?))
+    //     self.find_node(key).map(|n| &unsafe { n.as_ref() }.value)
     // }
+
+    // pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
+    // where
+    //     K: Borrow<Q> + Ord,
+    //     Q: Ord,
+    // {
+    //     self.find_node(key).map(|n| {
+    //         let n = unsafe { n.as_ref() };
+    //         (&n.key, &n.value)
+    //     })
+    // }
+
+    // pub fn is_empty(&self) -> bool {
+    //     self.len == 0
+    // }
+
+    // pub fn last(&self) -> Option<&V> {
+    //     self.root.last().map(|n| &unsafe { n.as_ref() }.value)
+    // }
+
+    // pub fn last_key_value(&self) -> Option<(&K, &V)> {
+    //     self.root.last().map(|n| {
+    //         let n = unsafe { n.as_ref() };
+    //         (&n.key, &n.value)
+    //     })
+    // }
+
+    // pub fn len(&self) -> usize {
+    //     self.len
+    // }
+
+    // TODO
+    // fn retain<F>(&mut self, f: F)
+    // where
+    //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
 }
-
-// impl<K: PartialEq + Ord, V, A: Augmenter<Key = K, Value = V>> RootOps for RootCached<K, V, A> {
-//     type Key = K;
-//     type Value = V;
-
-//     fn root(&self) -> NodePtr<Self::Key, Self::Value> {
-//         self.root.root
-//     }
-
-//     fn set_root(&mut self, new: NodePtr<Self::Key, Self::Value>) {
-//         self.root.root = new;
-//     }
-
-//     fn first(&self) -> NodePtr<Self::Key, Self::Value> {
-//         self.leftmost
-//     }
-
-//     fn last(&self) -> NodePtr<Self::Key, Self::Value> {
-//         self.root.last()
-//     }
-
-//     fn first_postorder(&self) -> NodePtr<Self::Key, Self::Value> {
-//         self.root.first_postorder()
-//     }
-
-//     fn replace_node(
-//         &mut self,
-//         victim: NonNull<Node<Self::Key, Self::Value>>,
-//         new: NonNull<Node<Self::Key, Self::Value>>,
-//     ) {
-//         if self.leftmost == victim.into() {
-//             self.leftmost = new.into();
-//         }
-//         self.root.replace_node(victim, new);
-//     }
-
-//     fn insert(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
-//         self.leftmost = node.into();
-//         self.root.insert(node);
-//     }
-
-//     fn erase(&mut self, node: NonNull<Node<Self::Key, Self::Value>>) {
-//         if self.leftmost == node.into() {
-//             self.leftmost = unsafe { node.as_ref() }.next();
-//         }
-//         self.root.erase(node);
-//     }
-// }
