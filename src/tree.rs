@@ -1,7 +1,6 @@
 use std::{
     borrow::Borrow,
     cmp::Ordering::{self, *},
-    fmt::Debug,
     mem,
     ops::Index,
     ptr::NonNull,
@@ -155,11 +154,6 @@ impl<K, V, C> Tree<K, V, C> {
     pub fn len(&self) -> usize {
         self.len
     }
-
-    // TODO
-    // fn retain<F>(&mut self, f: F)
-    // where
-    //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
 }
 
 impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
@@ -191,7 +185,7 @@ impl<K, V, C> Drop for Tree<K, V, C> {
 #[cfg(debug_assertions)]
 impl<K, V, C> Tree<K, V, C>
 where
-    K: Debug,
+    K: std::fmt::Debug,
 {
     #[allow(dead_code)]
     fn validate(&self) -> bool {
@@ -199,11 +193,11 @@ where
     }
 }
 
-impl<K, V, C> Debug for Tree<K, V, C>
+impl<K, V, C> std::fmt::Debug for Tree<K, V, C>
 where
-    K: Debug,
-    V: Debug,
-    C: Debug,
+    K: std::fmt::Debug,
+    V: std::fmt::Debug,
+    C: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_map().entries(self.iter()).finish()

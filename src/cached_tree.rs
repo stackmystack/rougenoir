@@ -58,10 +58,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
         }
     }
 
-    pub fn pop_first(&mut self) -> Option<(K, V)>
-    where
-        K: PartialEq,
-    {
+    pub fn pop_first(&mut self) -> Option<(K, V)> {
         Some(self.pop_node(self.root.first()?))
     }
 
@@ -169,11 +166,6 @@ impl<K, V, C> CachedTree<K, V, C> {
     pub fn len(&self) -> usize {
         self.len
     }
-
-    // TODO
-    // fn retain<F>(&mut self, f: F)
-    // where
-    //     F: FnMut(&Self::Key, &mut Self::Value) -> bool;
 }
 
 impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for CachedTree<K, V, C>
