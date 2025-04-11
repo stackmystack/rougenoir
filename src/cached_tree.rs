@@ -6,7 +6,35 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{CachedTree, Callbacks, Node, NodePtr, NodePtrExt, Root, alloc_node, dealloc_root};
+use crate::{
+    CachedTree, Callbacks, Node, NodePtr, NodePtrExt, Noop, Root, alloc_node, dealloc_root,
+};
+
+impl<K, V> CachedTree<K, V, Noop<K, V>> {
+    pub fn new() -> Self {
+        CachedTree {
+            leftmost: None,
+            len: 0,
+            root: Root::new(Noop::new()),
+        }
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for CachedTree<K, V, C> {
+    fn default() -> Self {
+        Self::with_callbacks(C::default())
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
+    pub fn with_callbacks(augmented: C) -> Self {
+        CachedTree {
+            leftmost: None,
+            len: 0,
+            root: Root::new(augmented),
+        }
+    }
+}
 
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> CachedTree<K, V, C> {
     pub fn clear(&mut self) {

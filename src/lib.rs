@@ -249,60 +249,10 @@ pub struct Tree<K, V, C> {
     root: Root<K, V, C>,
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
-    pub fn with_callbacks(augmented: C) -> Self {
-        Tree {
-            len: 0,
-            root: Root::new(augmented),
-        }
-    }
-}
-
-impl<K, V> Tree<K, V, Noop<K, V>> {
-    pub fn new() -> Self {
-        Tree {
-            len: 0,
-            root: Root::new(Noop::new()),
-        }
-    }
-}
-
-impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C> {
-    fn default() -> Self {
-        Self::with_callbacks(C::default())
-    }
-}
-
 pub struct CachedTree<K, V, C> {
     leftmost: NodePtr<K, V>,
     len: usize,
     root: Root<K, V, C>,
-}
-
-impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
-    pub fn with_callbacks(augmented: C) -> Self {
-        CachedTree {
-            leftmost: None,
-            len: 0,
-            root: Root::new(augmented),
-        }
-    }
-}
-
-impl<K, V> CachedTree<K, V, Noop<K, V>> {
-    pub fn new() -> Self {
-        CachedTree {
-            leftmost: None,
-            len: 0,
-            root: Root::new(Noop::new()),
-        }
-    }
-}
-
-impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for CachedTree<K, V, C> {
-    fn default() -> Self {
-        Self::with_callbacks(C::default())
-    }
 }
 
 /// SAFETY: it leaks; use with dealloc_node.

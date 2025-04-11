@@ -6,7 +6,31 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{Callbacks, Node, NodePtr, NodePtrExt, Root, Tree, alloc_node, dealloc_root};
+use crate::{Callbacks, Node, NodePtr, NodePtrExt, Noop, Root, Tree, alloc_node, dealloc_root};
+
+impl<K, V> Tree<K, V, Noop<K, V>> {
+    pub fn new() -> Self {
+        Tree {
+            len: 0,
+            root: Root::new(Noop::new()),
+        }
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C> {
+    fn default() -> Self {
+        Self::with_callbacks(C::default())
+    }
+}
+
+impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+    pub fn with_callbacks(augmented: C) -> Self {
+        Tree {
+            len: 0,
+            root: Root::new(augmented),
+        }
+    }
+}
 
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
     pub fn clear(&mut self) {
