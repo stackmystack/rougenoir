@@ -1,4 +1,10 @@
-use std::{borrow::Borrow, cmp::Ordering::*, mem, ops::Index, ptr::NonNull};
+use std::{
+    borrow::Borrow,
+    cmp::Ordering::{self, *},
+    mem,
+    ops::Index,
+    ptr::NonNull,
+};
 
 use crate::{CachedTree, Callbacks, Node, NodePtr, NodePtrExt, Root, alloc_node, dealloc_root};
 
@@ -192,4 +198,96 @@ impl<K, V, C> Drop for CachedTree<K, V, C> {
             dealloc_root(&mut self.root, self.len);
         }
     }
+}
+
+#[cfg(debug_assertions)]
+impl<K, V, C> CachedTree<K, V, C>
+where
+    K: std::fmt::Debug,
+{
+    #[allow(dead_code)]
+    fn validate(&self) -> bool {
+        self.root.validate()
+    }
+}
+
+impl<K, V, C> std::fmt::Debug for CachedTree<K, V, C>
+where
+    K: std::fmt::Debug,
+    V: std::fmt::Debug,
+    C: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
+    }
+}
+
+impl<K: PartialEq, V: PartialEq, C: PartialEq> PartialEq for CachedTree<K, V, C> {
+    fn eq(&self, other: &CachedTree<K, V, C>) -> bool {
+        self.len() == other.len()
+            && self.root.callbacks == other.root.callbacks
+            && self.iter().zip(other.iter()).all(|(a, b)| a == b)
+    }
+}
+
+impl<K, V, C> Clone for CachedTree<K, V, C>
+where
+    K: Clone + Ord,
+    V: Clone,
+    C: Clone + Callbacks<Key = K, Value = V>,
+{
+    fn clone(&self) -> Self {
+        if self.is_empty() {
+            CachedTree {
+                leftmost: None,
+                len: 0,
+                root: self.root.clone(),
+            }
+        } else {
+            let mut tree = CachedTree {
+                leftmost: None,
+                len: 0,
+                root: Root {
+                    callbacks: self.root.callbacks.clone(),
+                    node: None,
+                },
+            };
+            for (k, v) in self.iter() {
+                tree.insert(k.clone(), v.clone());
+            }
+            tree
+        }
+    }
+}
+
+impl<K: PartialOrd, V: PartialOrd, C: PartialOrd> PartialOrd for CachedTree<K, V, C> {
+    #[inline]
+    fn partial_cmp(&self, other: &CachedTree<K, V, C>) -> Option<Ordering> {
+        self.iter().partial_cmp(other.iter())
+    }
+}
+
+impl<K: Eq, V: Eq, C: Eq> Eq for CachedTree<K, V, C> {}
+
+impl<K: Ord, V: Ord, C: Ord> Ord for CachedTree<K, V, C> {
+    #[inline]
+    fn cmp(&self, other: &CachedTree<K, V, C>) -> Ordering {
+        self.iter().cmp(other.iter())
+    }
+}
+
+unsafe impl<K, V, C> Send for CachedTree<K, V, C>
+where
+    K: Send,
+    V: Send,
+    C: Send,
+{
+}
+
+unsafe impl<K, V, C> Sync for CachedTree<K, V, C>
+where
+    K: Sync,
+    V: Sync,
+    C: Sync,
+{
 }
