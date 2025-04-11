@@ -291,3 +291,450 @@ where
     C: Sync,
 {
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::Noop;
+    use pretty_assertions::{assert_eq, assert_ne};
+    use quickcheck_macros::quickcheck;
+    use rand::SeedableRng;
+    use rand::seq::SliceRandom;
+    use rand_chacha::ChaCha8Rng;
+
+    #[test]
+    fn clear() {
+        let mut tree = CachedTree::new();
+        tree.clear();
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(true, tree.is_empty());
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(false, tree.is_empty());
+        assert_eq!(1, tree.len());
+
+        tree.clear();
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(0, tree.len());
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        tree.insert(0, zero);
+        tree.insert(42, forty_two.clone());
+        tree.insert(100, hundo);
+        assert_eq!(true, tree.contains_key(&0));
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+        assert_eq!(false, tree.is_empty());
+
+        tree.clear();
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(0, tree.len());
+        assert_eq!(true, tree.is_empty());
+    }
+
+    #[test]
+    fn clone_and_eq_for_unit() {
+        let mut t1 = CachedTree::new();
+        let mut t2 = t1.clone();
+        assert_eq!(t1, t2);
+
+        t1.insert(0, ());
+        t1.insert(1, ());
+        t1.insert(2, ());
+
+        assert_ne!(t1, t2);
+        assert_eq!(3, t1.len());
+        assert_eq!(0, t2.len());
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(false, t2.contains_key(&0));
+        assert_eq!(false, t2.contains_key(&1));
+        assert_eq!(false, t2.contains_key(&2));
+
+        t2.insert(0, ());
+        t2.insert(1, ());
+        t2.insert(2, ());
+        assert_eq!(t1, t2);
+        assert_eq!(3, t1.len());
+        assert_eq!(3, t2.len());
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(true, t2.contains_key(&0));
+        assert_eq!(true, t2.contains_key(&1));
+        assert_eq!(true, t2.contains_key(&2));
+    }
+
+    #[test]
+    fn clone_and_eq_for_string() {
+        let mut t1 = CachedTree::new();
+        let mut t2 = t1.clone();
+        assert_eq!(t1, t2);
+
+        t1.insert(0, "zero".to_string());
+        t1.insert(1, "one".to_string());
+        t1.insert(2, "two".to_string());
+
+        assert_ne!(t1, t2);
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(false, t2.contains_key(&0));
+        assert_eq!(false, t2.contains_key(&1));
+        assert_eq!(false, t2.contains_key(&2));
+
+        t2.insert(0, "zero".to_string());
+        t2.insert(1, "one".to_string());
+        t2.insert(2, "two".to_string());
+        assert_eq!(t1, t2);
+        assert_eq!(3, t1.len());
+        assert_eq!(3, t2.len());
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(true, t2.contains_key(&0));
+        assert_eq!(true, t2.contains_key(&1));
+        assert_eq!(true, t2.contains_key(&2));
+    }
+
+    #[test]
+    fn clone_and_eq_for_str() {
+        let mut t1 = CachedTree::new();
+        let mut t2 = t1.clone();
+        assert_eq!(t1, t2);
+
+        let zero_0 = "zero";
+        let one_0 = "one";
+        let two_0 = "two";
+
+        t1.insert(0, zero_0);
+        t1.insert(1, one_0);
+        t1.insert(2, two_0);
+
+        assert_ne!(t1, t2);
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(false, t2.contains_key(&0));
+        assert_eq!(false, t2.contains_key(&1));
+        assert_eq!(false, t2.contains_key(&2));
+
+        t2.insert(0, zero_0);
+        t2.insert(1, one_0);
+        t2.insert(2, two_0);
+        assert_eq!(t1, t2);
+        assert_eq!(3, t1.len());
+        assert_eq!(3, t2.len());
+        assert_eq!(true, t1.contains_key(&0));
+        assert_eq!(true, t1.contains_key(&1));
+        assert_eq!(true, t1.contains_key(&2));
+        assert_eq!(true, t2.contains_key(&0));
+        assert_eq!(true, t2.contains_key(&1));
+        assert_eq!(true, t2.contains_key(&2));
+
+        t2.clear();
+        let zero_1 = "zero";
+        let one_1 = "one";
+        let two_1 = "two";
+        t2.insert(0, zero_1);
+        t2.insert(1, one_1);
+        t2.insert(2, two_1);
+        assert_eq!(t1, t2);
+    }
+
+    #[test]
+    fn contains_many() {
+        let forty_two = "forty two".to_string();
+        let mut tree = CachedTree::new();
+        let mut res = tree.insert(42, forty_two);
+        assert_eq!(None, res);
+        assert_eq!(1, tree.len());
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        res = tree.insert(0, zero);
+        assert_eq!(None, res);
+        assert_eq!(2, tree.len());
+        res = tree.insert(100, hundo);
+        assert_eq!(None, res);
+        assert_eq!(3, tree.len());
+
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&0));
+        assert_eq!(true, tree.contains_key(&100));
+        assert_eq!(false, tree.contains_key(&1));
+        assert_eq!(false, tree.contains_key(&1000));
+    }
+
+    #[test]
+    fn first_and_last() {
+        let mut tree = CachedTree::new();
+        assert_eq!(None, tree.first());
+        assert_eq!(None, tree.last());
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        assert_eq!(Some(&forty_two), tree.first());
+        assert_eq!(Some((&42, &forty_two)), tree.first_key_value());
+        assert_eq!(Some((&42, &forty_two)), tree.last_key_value());
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        tree.insert(0, zero.clone());
+        tree.insert(100, hundo.clone());
+
+        assert_eq!(Some(&zero), tree.first());
+        assert_eq!(Some((&0, &zero)), tree.first_key_value());
+        assert_eq!(Some(&hundo), tree.last());
+        assert_eq!(Some((&100, &hundo)), tree.last_key_value());
+    }
+
+    #[test]
+    fn index_passes() {
+        let mut tree = CachedTree::new();
+        let forty_two_str = "forty two";
+        let forty_two = forty_two_str.to_string();
+        tree.insert(forty_two.clone(), forty_two.clone());
+        assert_eq!(forty_two, tree[forty_two_str]);
+        assert_eq!(forty_two, tree[&forty_two]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn index_panics() {
+        let tree: CachedTree<usize, (), Noop<usize, ()>> = CachedTree::new();
+        assert_eq!((), tree[&42]);
+    }
+
+    #[test]
+    fn insert_multiple_values() {
+        let data: Vec<(usize, String)> = (0..100).map(|i| (i, format!("{i}"))).collect();
+        let mut tree = CachedTree::new();
+        for (k, v) in data.iter() {
+            tree.insert(*k, v.to_string());
+        }
+
+        assert_eq!(data.len(), tree.len());
+        for (k, v) in data.iter() {
+            assert_eq!(true, tree.contains_key(k));
+            assert_eq!(Some((k, v)), tree.get_key_value(k));
+        }
+    }
+
+    #[test]
+    fn insert_same_key() {
+        let mut tree = CachedTree::new();
+        let forty_two = "forty two".to_string();
+        let mut res = tree.insert(42, forty_two.clone());
+        assert_eq!(None, res);
+        assert_eq!(1, tree.len());
+        res = tree.insert(42, "42".to_string());
+        assert_eq!(Some(forty_two), res);
+        assert_eq!(1, tree.len());
+    }
+
+    #[test]
+    fn odd_even() {
+        let mut tree = CachedTree::new();
+        for i in 0..10 {
+            tree.insert(i, i);
+        }
+        for i in (0..10).filter(|i| i % 2 == 0) {
+            tree.remove(&i);
+        }
+        assert_eq!(5, tree.len());
+        assert_eq!(vec![1, 3, 5, 7, 9], tree.into_keys().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn partial_ord() {
+        let mut t1 = CachedTree::new();
+        let mut t2 = CachedTree::new();
+        let one = "one";
+        let two = "two";
+        let three = "three";
+
+        assert!(t1 <= t2);
+        assert!(t1 >= t2);
+        assert!(t1 == t2);
+
+        t1.insert(1, one);
+        t2.insert(1, one);
+        assert!(t1 <= t2);
+        assert!(t1 >= t2);
+        assert!(t1 == t2);
+
+        t2.insert(2, two);
+        assert!(t1 <= t2);
+        assert!(t1 < t2);
+
+        t1.insert(3, three);
+        assert!(t1 >= t2);
+        assert!(t1 > t2);
+    }
+
+    #[test]
+    fn pop_first() {
+        let mut tree = CachedTree::new();
+
+        let mut res = tree.pop_first();
+        assert_eq!(None, res);
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        res = tree.pop_first();
+        assert_eq!(Some((42, forty_two.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&42));
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        tree.insert(42, forty_two.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(100, hundo.clone());
+
+        res = tree.pop_first();
+        assert_eq!(Some((0, zero.clone())), res);
+        assert_eq!(2, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        res = tree.pop_first();
+        assert_eq!(Some((42, forty_two.clone())), res);
+        assert_eq!(1, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        res = tree.pop_first();
+        assert_eq!(Some((100, hundo.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(false, tree.contains_key(&100));
+    }
+
+    #[test]
+    fn pop_last() {
+        let mut tree = CachedTree::new();
+
+        let mut res = tree.pop_last();
+        assert_eq!(None, res);
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        res = tree.pop_last();
+        assert_eq!(Some((42, forty_two.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&42));
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        tree.insert(42, forty_two.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(100, hundo.clone());
+
+        res = tree.pop_last();
+        assert_eq!(Some((100, hundo.clone())), res);
+        assert_eq!(2, tree.len());
+        assert_eq!(true, tree.contains_key(&0));
+        assert_eq!(true, tree.contains_key(&42));
+        assert_eq!(false, tree.contains_key(&100));
+
+        res = tree.pop_last();
+        assert_eq!(Some((42, forty_two.clone())), res);
+        assert_eq!(1, tree.len());
+        assert_eq!(true, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(false, tree.contains_key(&100));
+
+        res = tree.pop_last();
+        assert_eq!(Some((0, zero.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(false, tree.contains_key(&100));
+    }
+
+    #[test]
+    fn remove() {
+        let mut tree = CachedTree::new();
+
+        let mut res = tree.remove(&42);
+        assert_eq!(None, res);
+
+        let forty_two = "forty two".to_string();
+        tree.insert(42, forty_two.clone());
+        res = tree.remove(&42);
+        assert_eq!(Some((42, forty_two.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&42));
+
+        let zero = "zero".to_string();
+        let hundo = "hundo".to_string();
+        tree.insert(42, forty_two.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(100, hundo.clone());
+
+        res = tree.remove(&42);
+        assert_eq!(Some((42, forty_two.clone())), res);
+        assert_eq!(2, tree.len());
+        assert_eq!(true, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        res = tree.remove(&0);
+        assert_eq!(Some((0, zero.clone())), res);
+        assert_eq!(1, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(true, tree.contains_key(&100));
+
+        res = tree.remove(&100);
+        assert_eq!(Some((100, hundo.clone())), res);
+        assert_eq!(0, tree.len());
+        assert_eq!(false, tree.contains_key(&0));
+        assert_eq!(false, tree.contains_key(&42));
+        assert_eq!(false, tree.contains_key(&100));
+    }
+
+    #[quickcheck]
+    fn insertion_order_is_irrelevant(xs: Vec<(isize, ())>) -> bool {
+        let t1 = CachedTree::<isize, (), Noop<isize, ()>>::from_iter(xs.clone().into_iter());
+        let t2 = CachedTree::<isize, (), Noop<isize, ()>>::from_iter(xs.into_iter().rev());
+        t1 == t2
+    }
+
+    const TEST_SEED: u64 = 42;
+
+    fn rand_slice<I, T>(items: I, ratio: f64) -> Vec<T>
+    where
+        I: IntoIterator<Item = T> + ExactSizeIterator,
+    {
+        assert!(ratio > 0.0 && ratio <= 1.0);
+        let mut rng = ChaCha8Rng::seed_from_u64(TEST_SEED);
+        let len = items.len() as f64;
+        let mut selected = items.into_iter().collect::<Vec<_>>();
+        selected.shuffle(&mut rng);
+        selected.truncate((len * ratio).round().clamp(0.0, usize::MAX as f64) as usize);
+        selected
+    }
+
+    #[quickcheck]
+    fn remove_arbitrary(xs: Vec<(u8, ())>) -> bool {
+        let remove = rand_slice(xs.iter().map(|(k, _)| *k), 0.5);
+        let mut tree = CachedTree::<u8, (), Noop<u8, ()>>::from_iter(xs.into_iter());
+        for k in &remove {
+            tree.remove(k);
+        }
+        for k in remove {
+            assert_eq!(false, tree.contains_key(&k));
+        }
+        true
+    }
+}

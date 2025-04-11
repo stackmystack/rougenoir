@@ -749,3 +749,155 @@ where
         None
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{CachedTree, Noop};
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn extend() {
+        let mut tree = CachedTree::new();
+        let zero = "zero".to_string();
+        let one = "one".to_string();
+        let forty_two = "forty_two".to_string();
+        let hundo = "hundo".to_string();
+
+        tree.insert(100, hundo.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(42, forty_two.clone());
+        tree.extend(vec![(1, one.clone())]);
+
+        assert_eq!(4, tree.len());
+        let mut iter = tree.iter();
+        assert_eq!(Some((&0, &zero)), iter.next());
+        assert_eq!(Some((&1, &one)), iter.next());
+        assert_eq!(Some((&42, &forty_two)), iter.next());
+        assert_eq!(Some((&100, &hundo)), iter.next());
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn for_loop() {
+        let mut tree = CachedTree::new();
+        let zero = "zero".to_string();
+        let forty_two = "forty_two".to_string();
+        let hundo = "hundo".to_string();
+
+        tree.insert(100, hundo.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(42, forty_two.clone());
+
+        for (k, _v) in &tree {
+            // This is a test for compilation.
+            let _ = k;
+        }
+
+        for (_k, v) in tree {
+            // This is a test for compilation.
+            let _ = v;
+        }
+    }
+
+    #[test]
+    fn into_iter_empty() {
+        let tree = CachedTree::<usize, (), Noop<usize, ()>>::new();
+        let vec = tree.into_iter().collect::<Vec<_>>();
+        assert_eq!(0, vec.len());
+    }
+
+    #[test]
+    fn into_iter() {
+        let mut tree = CachedTree::new();
+        let zero = "zero".to_string();
+        let forty_two = "forty_two".to_string();
+        let hundo = "hundo".to_string();
+
+        tree.insert(100, hundo.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(42, forty_two.clone());
+
+        let vec = tree.into_iter().collect::<Vec<_>>();
+        assert_eq!(3, vec.len());
+        assert_eq!((0, zero), vec[0]);
+        assert_eq!((42, forty_two), vec[1]);
+        assert_eq!((100, hundo), vec[2]);
+    }
+
+    #[test]
+    fn iter_empty() {
+        let tree = CachedTree::<usize, (), Noop<usize, ()>>::new();
+        assert_eq!(None, tree.iter().next());
+    }
+
+    #[test]
+    fn iter() {
+        let mut tree = CachedTree::new();
+        let zero = "zero".to_string();
+        let forty_two = "forty_two".to_string();
+        let hundo = "hundo".to_string();
+
+        tree.insert(100, hundo.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(42, forty_two.clone());
+
+        let mut iter = tree.iter();
+
+        assert_eq!(Some((&0, &zero)), iter.next());
+        assert_eq!(Some((&42, &forty_two)), iter.next());
+        assert_eq!(Some((&100, &hundo)), iter.next());
+        assert_eq!(None, iter.next());
+        assert_eq!(None, iter.next());
+
+        let mut tree = CachedTree::new();
+        for i in 0..128 {
+            tree.insert(i, ());
+        }
+        let mut iter = tree.iter();
+        for i in 0..128 {
+            assert_eq!(Some((&i, &())), iter.next());
+        }
+        assert_eq!(None, iter.next());
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn iter_rev_insert() {
+        let mut tree = CachedTree::new();
+        for i in (0..128).rev() {
+            tree.insert(i, ());
+        }
+        let mut iter = tree.iter();
+        for i in 0..128 {
+            assert_eq!(Some((&i, &())), iter.next());
+        }
+        assert_eq!(None, iter.next());
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn iter_mut_empty() {
+        let mut tree = CachedTree::<usize, (), Noop<usize, ()>>::new();
+        assert_eq!(None, tree.iter_mut().next());
+    }
+
+    #[test]
+    fn iter_mut() {
+        let mut tree = CachedTree::new();
+        let mut zero = "zero".to_string();
+        let forty_two = "forty_two".to_string();
+        let hundo = "hundo".to_string();
+        let stomp = "stomp";
+
+        tree.insert(100, hundo.clone());
+        tree.insert(0, zero.clone());
+        tree.insert(42, forty_two.clone());
+
+        let mut iter = tree.iter_mut();
+        let res = iter.next();
+        assert_eq!(Some((&0, &mut zero)), res);
+        let res = res.unwrap();
+        res.1.push_str(stomp);
+        assert_eq!(&format!("{zero}{stomp}"), res.1);
+    }
+}
