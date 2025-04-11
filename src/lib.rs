@@ -319,3 +319,42 @@ where
 pub unsafe fn dealloc_node<K, V>(current: *mut Node<K, V>) {
     let _ = unsafe { Box::from_raw(current) };
 }
+
+/// SAFETY: it drops all nodes from the root.
+/// Pass len = 0 if you're unsure of the length of the # of elements in
+/// your tree.
+pub unsafe fn dealloc_root<K, V, C>(root: &mut Root<K, V, C>, len: usize) {
+    enum ComingFrom {
+        Left,
+        Right,
+    }
+    let mut parent = root.node;
+    let mut direction = Vec::new();
+    // max depth = 2 × log₂(n+1)
+    let log_val = (len + 1).checked_ilog2().unwrap_or(0) as usize;
+    direction.reserve(log_val.checked_mul(2).unwrap_or(usize::MAX).max(4096));
+    while let Some(mut current) = parent {
+        let current_ref = unsafe { current.as_ref() };
+        if current_ref.left.is_some() {
+            parent = current_ref.left;
+            direction.push(ComingFrom::Left);
+            continue;
+        }
+        if current_ref.right.is_some() {
+            parent = current_ref.right;
+            direction.push(ComingFrom::Right);
+            continue;
+        }
+        parent = current_ref.parent();
+        // drop; don't call rbtree erase => needless overhead.
+        if parent.is_some() {
+            match direction.pop() {
+                Some(ComingFrom::Left) => unsafe { parent.unwrap().as_mut() }.left = None,
+                Some(ComingFrom::Right) => unsafe { parent.unwrap().as_mut() }.right = None,
+                _ => {}
+            }
+        }
+        // SAFETY: Now it's safe to drop
+        unsafe { dealloc_node(current.as_mut()) };
+    }
+}

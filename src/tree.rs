@@ -7,7 +7,7 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{Callbacks, Node, NodePtr, NodePtrExt, Root, Tree, alloc_node, dealloc_node};
+use crate::{Callbacks, Node, NodePtr, NodePtrExt, Root, Tree, alloc_node, dealloc_root};
 
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
     pub fn clear(&mut self) {
@@ -182,38 +182,8 @@ where
 
 impl<K, V, C> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
-        enum ComingFrom {
-            Left,
-            Right,
-        }
-        let mut parent = self.root.node;
-        let mut direction = Vec::new();
-        // max depth = 2 × log₂(n+1)
-        let log_val = (self.len + 1).checked_ilog2().unwrap_or(0) as usize;
-        direction.reserve(log_val.checked_mul(2).unwrap_or(usize::MAX).max(4096));
-        while let Some(mut current) = parent {
-            let current_ref = unsafe { current.as_ref() };
-            if current_ref.left.is_some() {
-                parent = current_ref.left;
-                direction.push(ComingFrom::Left);
-                continue;
-            }
-            if current_ref.right.is_some() {
-                parent = current_ref.right;
-                direction.push(ComingFrom::Right);
-                continue;
-            }
-            parent = current_ref.parent();
-            // drop; don't call rbtree erase => needless overhead.
-            if parent.is_some() {
-                match direction.pop() {
-                    Some(ComingFrom::Left) => unsafe { parent.unwrap().as_mut() }.left = None,
-                    Some(ComingFrom::Right) => unsafe { parent.unwrap().as_mut() }.right = None,
-                    _ => {}
-                }
-            }
-            // SAFETY: Now it's safe to drop
-            unsafe { dealloc_node(current.as_mut()) };
+        unsafe {
+            dealloc_root(&mut self.root, self.len);
         }
     }
 }

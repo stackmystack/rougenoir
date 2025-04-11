@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, cmp::Ordering::*, mem, ops::Index, ptr::NonNull};
 
-use crate::{CachedTree, Callbacks, Node, NodePtr, NodePtrExt, Root, alloc_node};
+use crate::{CachedTree, Callbacks, Node, NodePtr, NodePtrExt, Root, alloc_node, dealloc_root};
 
 impl<K, V, C: Callbacks<Key = K, Value = V> + Default> CachedTree<K, V, C> {
     pub fn clear(&mut self) {
@@ -191,5 +191,13 @@ where
     #[inline]
     fn index(&self, key: &Q) -> &V {
         self.get(key).expect("no entry found for key")
+    }
+}
+
+impl<K, V, C> Drop for CachedTree<K, V, C> {
+    fn drop(&mut self) {
+        unsafe {
+            dealloc_root(&mut self.root, self.len);
+        }
     }
 }
