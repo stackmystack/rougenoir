@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use crate::{Callbacks, Noop, Set, Tree};
+use crate::{Noop, Set, Tree, TreeCallbacks};
 
 impl<T> Set<T, Noop<T, ()>> {
     pub fn new() -> Self {
@@ -8,13 +8,13 @@ impl<T> Set<T, Noop<T, ()>> {
     }
 }
 
-impl<T, C: Callbacks<Key = T, Value = ()> + Default> Default for Set<T, C> {
+impl<T, C: TreeCallbacks<Key = T, Value = ()> + Default> Default for Set<T, C> {
     fn default() -> Self {
         Self::with_callbacks(C::default())
     }
 }
 
-impl<T, C: Callbacks<Key = T, Value = ()>> Set<T, C> {
+impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C> {
     pub fn with_callbacks(augmented: C) -> Self {
         Self {
             tree: Tree::with_callbacks(augmented),
@@ -22,13 +22,13 @@ impl<T, C: Callbacks<Key = T, Value = ()>> Set<T, C> {
     }
 }
 
-impl<T, C: Callbacks<Key = T, Value = ()> + Default> Set<T, C> {
+impl<T, C: TreeCallbacks<Key = T, Value = ()> + Default> Set<T, C> {
     fn clear(&mut self) {
         self.tree.clear();
     }
 }
 
-impl<T, C: Callbacks<Key = T, Value = ()>> Set<T, C> {
+impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C> {
     pub fn insert(&mut self, key: T) -> bool
     where
         T: Ord,

@@ -1,6 +1,6 @@
-use crate::{Callbacks, Set, Tree};
+use crate::{Set, Tree, TreeCallbacks};
 
-impl<T: Ord, C: Callbacks<Key = T, Value = ()> + Default> FromIterator<T> for Set<T, C> {
+impl<T: Ord, C: TreeCallbacks<Key = T, Value = ()> + Default> FromIterator<T> for Set<T, C> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Set<T, C> {
         let inputs: Vec<_> = iter.into_iter().collect();
 

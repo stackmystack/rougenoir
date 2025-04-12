@@ -1,6 +1,6 @@
 use std::{iter::FusedIterator, marker::PhantomData};
 
-use crate::{CachedTree, Callbacks, NodePtr};
+use crate::{CachedTree, TreeCallbacks, NodePtr};
 
 impl<K, V, C> CachedTree<K, V, C> {
     /// Gets an iterator over the keys of the map, in sorted order.
@@ -85,7 +85,7 @@ impl<K, V, C> CachedTree<K, V, C> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> CachedTree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     /// Creates an iterator that visits all elements (key-value pairs) in
     /// ascending key order and uses a closure to determine if an element should
     /// be removed. If the closure returns `true`, the element is removed from
@@ -214,7 +214,7 @@ impl<K, V, C> IntoIter<K, V, C> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> IntoIterator for CachedTree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> IntoIterator for CachedTree<K, V, C> {
     type Item = (K, V);
     type IntoIter = IntoIter<K, V, C>;
 
@@ -224,7 +224,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> IntoIterator for CachedTree<K, V, C
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Iterator for IntoIter<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoIter<K, V, C> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
@@ -254,19 +254,19 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Iterator for IntoIter<K, V, C> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> DoubleEndedIterator for IntoIter<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> DoubleEndedIterator for IntoIter<K, V, C> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.0.pop_last()
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> ExactSizeIterator for IntoIter<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> ExactSizeIterator for IntoIter<K, V, C> {
     fn len(&self) -> usize {
         self.0.len
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> FusedIterator for IntoIter<K, V, C> {}
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> FusedIterator for IntoIter<K, V, C> {}
 
 pub struct Iter<'a, K, V> {
     first: NodePtr<K, V>,
@@ -276,7 +276,7 @@ pub struct Iter<'a, K, V> {
     _phantom_v: PhantomData<&'a V>,
 }
 
-impl<'a, K, V, C: Callbacks<Key = K, Value = V>> IntoIterator for &'a CachedTree<K, V, C> {
+impl<'a, K, V, C: TreeCallbacks<Key = K, Value = V>> IntoIterator for &'a CachedTree<K, V, C> {
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
 
@@ -434,7 +434,7 @@ impl<K, V> Clone for IterMut<'_, K, V> {
     }
 }
 
-impl<K: Ord, V, C: Callbacks<Key = K, Value = V>> Extend<(K, V)> for CachedTree<K, V, C> {
+impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V>> Extend<(K, V)> for CachedTree<K, V, C> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
         iter.into_iter().for_each(move |(k, v)| {
@@ -443,7 +443,7 @@ impl<K: Ord, V, C: Callbacks<Key = K, Value = V>> Extend<(K, V)> for CachedTree<
     }
 }
 
-impl<'a, K: Ord + Copy, V: Copy, C: Callbacks<Key = K, Value = V>> Extend<(&'a K, &'a V)>
+impl<'a, K: Ord + Copy, V: Copy, C: TreeCallbacks<Key = K, Value = V>> Extend<(&'a K, &'a V)>
     for CachedTree<K, V, C>
 {
     fn extend<I: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: I) {
@@ -491,7 +491,7 @@ pub struct ValuesMut<'a, K, V> {
 ///
 /// [`into_keys`]: CachedTree::into_keys
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct IntoKeys<K, V, C: Callbacks<Key = K, Value = V>> {
+pub struct IntoKeys<K, V, C: TreeCallbacks<Key = K, Value = V>> {
     inner: IntoIter<K, V, C>,
 }
 
@@ -502,7 +502,7 @@ pub struct IntoKeys<K, V, C: Callbacks<Key = K, Value = V>> {
 ///
 /// [`into_values`]: CachedTree::into_keys
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct IntoValues<K, V, C: Callbacks<Key = K, Value = V>> {
+pub struct IntoValues<K, V, C: TreeCallbacks<Key = K, Value = V>> {
     inner: IntoIter<K, V, C>,
 }
 
@@ -626,7 +626,7 @@ impl<K, V> ExactSizeIterator for ValuesMut<'_, K, V> {
 
 impl<K, V> FusedIterator for ValuesMut<'_, K, V> {}
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Iterator for IntoKeys<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoKeys<K, V, C> {
     type Item = K;
 
     fn next(&mut self) -> Option<K> {
@@ -656,21 +656,21 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Iterator for IntoKeys<K, V, C> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> DoubleEndedIterator for IntoKeys<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> DoubleEndedIterator for IntoKeys<K, V, C> {
     fn next_back(&mut self) -> Option<K> {
         self.inner.next_back().map(|(k, _)| k)
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> ExactSizeIterator for IntoKeys<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> ExactSizeIterator for IntoKeys<K, V, C> {
     fn len(&self) -> usize {
         self.inner.len()
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> FusedIterator for IntoKeys<K, V, C> {}
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> FusedIterator for IntoKeys<K, V, C> {}
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Iterator for IntoValues<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoValues<K, V, C> {
     type Item = V;
 
     fn next(&mut self) -> Option<V> {
@@ -686,21 +686,21 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Iterator for IntoValues<K, V, C> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> DoubleEndedIterator for IntoValues<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> DoubleEndedIterator for IntoValues<K, V, C> {
     fn next_back(&mut self) -> Option<V> {
         self.inner.next_back().map(|(_, v)| v)
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> ExactSizeIterator for IntoValues<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> ExactSizeIterator for IntoValues<K, V, C> {
     fn len(&self) -> usize {
         self.inner.len()
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> FusedIterator for IntoValues<K, V, C> {}
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> FusedIterator for IntoValues<K, V, C> {}
 
-impl<K: Ord, V, C: Callbacks<Key = K, Value = V> + Default> FromIterator<(K, V)>
+impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V> + Default> FromIterator<(K, V)>
     for CachedTree<K, V, C>
 {
     /// Constructs a `CachedTree<K, V>` from an iterator of key-value pairs.
@@ -722,7 +722,7 @@ impl<K: Ord, V, C: Callbacks<Key = K, Value = V> + Default> FromIterator<(K, V)>
 
 pub struct ExtractIf<'a, K, V, C, F>
 where
-    C: Callbacks<Key = K, Value = V>,
+    C: TreeCallbacks<Key = K, Value = V>,
     F: 'a + FnMut(&K, &mut V) -> bool,
 {
     pred: F,
@@ -733,7 +733,7 @@ where
 impl<'a, K, V, C, F> Iterator for ExtractIf<'a, K, V, C, F>
 where
     K: Ord,
-    C: Callbacks<Key = K, Value = V>,
+    C: TreeCallbacks<Key = K, Value = V>,
     F: 'a + FnMut(&K, &mut V) -> bool,
 {
     type Item = (K, V);

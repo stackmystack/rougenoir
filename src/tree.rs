@@ -6,7 +6,7 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{Callbacks, Node, NodePtr, NodePtrExt, Noop, Root, Tree, alloc_node, dealloc_root};
+use crate::{Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks, alloc_node, dealloc_root};
 
 impl<K, V> Tree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -17,13 +17,13 @@ impl<K, V> Tree<K, V, Noop<K, V>> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C> {
     fn default() -> Self {
         Self::with_callbacks(C::default())
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     pub fn with_callbacks(augmented: C) -> Self {
         Tree {
             len: 0,
@@ -32,7 +32,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
     pub fn clear(&mut self) {
         drop(Tree {
             len: mem::replace(&mut self.len, 0),
@@ -44,7 +44,7 @@ impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
     }
 }
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
     where
         K: Ord,
@@ -180,7 +180,7 @@ impl<K, V, C> Tree<K, V, C> {
     }
 }
 
-impl<K, Q: ?Sized, V, C: Callbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
+impl<K, Q: ?Sized, V, C: TreeCallbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
 where
     K: Borrow<Q> + Ord,
     Q: Ord,
@@ -240,7 +240,7 @@ impl<K, V, C> Clone for Tree<K, V, C>
 where
     K: Clone + Ord,
     V: Clone,
-    C: Clone + Callbacks<Key = K, Value = V>,
+    C: Clone + TreeCallbacks<Key = K, Value = V>,
 {
     fn clone(&self) -> Self {
         if self.is_empty() {

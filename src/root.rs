@@ -1,15 +1,15 @@
 use std::ptr::NonNull;
 
-use super::{Callbacks, Color, Node, NodePtr, NodePtrExt, Root};
+use super::{Color, Node, NodePtr, NodePtrExt, Root, TreeCallbacks};
 
-impl<K, V, C: Callbacks<Key = K, Value = V> + Default> Default for Root<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Default for Root<K, V, C> {
     fn default() -> Self {
         Root::new(C::default())
     }
 }
 
 // Public
-impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
     pub fn new(augmented: C) -> Self {
         Root {
             node: None,
@@ -276,7 +276,7 @@ impl<K, V, C> Root<K, V, C> {
 
 // Private
 
-impl<K, V, C: Callbacks<Key = K, Value = V>> Root<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
     #[inline]
     fn erase_augmented(&mut self, node: NonNull<Node<K, V>>) -> NodePtr<K, V> {
         let node = unsafe { node.as_ref() };

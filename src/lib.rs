@@ -187,7 +187,7 @@ pub struct Node<K, V> {
     pub value: V,
 }
 
-pub trait Callbacks {
+pub trait TreeCallbacks {
     type Key;
     type Value;
 
@@ -221,7 +221,7 @@ impl<K, V> Noop<K, V> {
     }
 }
 
-impl<K, V> Callbacks for Noop<K, V> {
+impl<K, V> TreeCallbacks for Noop<K, V> {
     type Key = K;
     type Value = V;
 
