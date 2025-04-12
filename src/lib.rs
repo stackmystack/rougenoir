@@ -3,6 +3,7 @@ mod cached_tree;
 mod iter;
 mod node;
 mod root;
+mod set;
 mod tree;
 
 use std::{marker::PhantomData, ptr::NonNull};
@@ -253,6 +254,10 @@ pub struct CachedTree<K, V, C> {
     leftmost: NodePtr<K, V>,
     len: usize,
     root: Root<K, V, C>,
+}
+
+pub struct Set<T, C> {
+    tree: Tree<T, (), C>,
 }
 
 /// SAFETY: it leaks; use with dealloc_node.

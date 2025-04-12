@@ -152,7 +152,7 @@ impl<K, V, C> Tree<K, V, C> {
     pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
     where
         K: Borrow<Q> + Ord,
-        Q: Ord,
+        Q: Ord + ?Sized,
     {
         self.find_node(key).map(|n| {
             let n = unsafe { n.as_ref() };
@@ -160,7 +160,7 @@ impl<K, V, C> Tree<K, V, C> {
         })
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
 
@@ -175,7 +175,7 @@ impl<K, V, C> Tree<K, V, C> {
         })
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.len
     }
 }
