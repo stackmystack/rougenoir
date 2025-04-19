@@ -105,7 +105,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
         if self.leftmost.is_some_and(|l| l == node) {
             self.leftmost = unsafe { node.as_ref() }.next();
         }
-        let first_node = unsafe { Box::from_raw(node.as_ptr()) };
+        let first_node = *unsafe { Box::from_raw(node.as_ptr()) };
         self.len -= 1;
         (first_node.key, first_node.value)
     }

@@ -739,14 +739,16 @@ where
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
+        let mut res = None;
         while let Some(mut next_ref) = self.next {
             let next_ref = unsafe { next_ref.as_mut() };
             self.next = next_ref.next();
             if (self.pred)(&next_ref.key, &mut next_ref.value) {
-                return self.tree.remove(&next_ref.key);
+                res = Some(next_ref);
+                break;
             }
         }
-        None
+        res.map(|f| self.tree.remove(&f.key)).flatten()
     }
 }
 

@@ -279,7 +279,7 @@ where
 ///
 /// It drops; use after alloc_node.
 pub unsafe fn dealloc_node<K, V>(current: *mut Node<K, V>) {
-    let _ = unsafe { Box::from_raw(current) };
+    drop(unsafe { Box::from_raw(current) });
 }
 
 /// # SAFETY

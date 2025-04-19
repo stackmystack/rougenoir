@@ -90,7 +90,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> (K, V) {
         self.root.erase(node);
         // TODO: we have a second place to dealloc. Should we use dealloc_node?
-        let first_node = unsafe { Box::from_raw(node.as_ptr()) };
+        let first_node = *unsafe { Box::from_raw(node.as_ptr()) };
         self.len -= 1;
         (first_node.key, first_node.value)
     }
