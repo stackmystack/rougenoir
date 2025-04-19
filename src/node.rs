@@ -3,6 +3,8 @@ use std::{
     ptr::{self, NonNull},
 };
 
+use crate::Direction;
+
 use super::{Color, Node, NodePtr, NodePtrExt};
 
 // Public API.
@@ -46,11 +48,15 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub fn link(&mut self, parent: *mut Node<K, V>, link: &mut NodePtr<K, V>) {
-        self.parent_color = parent;
-        self.left = None;
-        self.right = None;
-        *link = Some(self.into());
+    pub fn link(node: &mut Self, parent: *mut Node<K, V>, direction: Direction) {
+        node.parent_color = parent;
+        node.left = None;
+        node.right = None;
+        match direction {
+            Direction::Left => unsafe { parent.as_mut().unwrap() }.left = NonNull::new(node),
+            Direction::Right => unsafe { parent.as_mut().unwrap() }.right = NonNull::new(node),
+            _ => unreachable!(),
+        };
     }
 
     #[inline(always)]

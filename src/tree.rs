@@ -6,7 +6,9 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks, alloc_node, dealloc_root};
+use crate::{
+    Direction, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks, alloc_node, dealloc_root,
+};
 
 impl<K, V> Tree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -56,22 +58,32 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                 None
             }
             Some(_) => {
-                let mut current_node = &mut self.root.node;
-                let mut parent = current_node.unwrap();
-                while let Some(mut current_ptr) = *current_node {
-                    parent = current_ptr;
-                    let current = unsafe { current_ptr.as_mut() };
-                    match key.cmp(&current.key) {
+                let mut current_node = self.root.node.ptr();
+                let mut parent = current_node;
+                let mut direction = Direction::None;
+                while !current_node.is_null() {
+                    parent = current_node;
+                    match key.cmp(&unsafe { current_node.as_ref().unwrap() }.key) {
                         Equal => {
-                            return Some(std::mem::replace(&mut current.value, value));
+                            let res = std::mem::replace(
+                                &mut unsafe { current_node.as_mut().unwrap() }.value,
+                                value,
+                            );
+                            return Some(res);
                         }
-                        Greater => current_node = &mut current.right,
-                        Less => current_node = &mut current.left,
-                    }
+                        Greater => {
+                            direction = Direction::Right;
+                            current_node = unsafe { current_node.as_ref().unwrap() }.right.ptr();
+                        }
+                        Less => {
+                            direction = Direction::Left;
+                            current_node = unsafe { current_node.as_ref().unwrap() }.left.ptr();
+                        }
+                    };
                 }
 
                 let mut node = unsafe { alloc_node(key, value) };
-                node.link(parent, current_node);
+                node.link(unsafe { parent.as_mut().unwrap() }, direction);
                 self.root.insert(node.expect("can never be None"));
                 self.len += 1;
                 None

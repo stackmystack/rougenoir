@@ -32,6 +32,12 @@ impl From<usize> for Color {
     }
 }
 
+pub enum Direction {
+    Left,
+    Right,
+    None,
+}
+
 pub type NodePtr<K, V> = Option<NonNull<Node<K, V>>>;
 
 pub trait NodePtrExt {
@@ -41,11 +47,7 @@ pub trait NodePtrExt {
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
     fn left(&self) -> NodePtr<Self::Key, Self::Value>;
-    fn link(
-        &mut self,
-        parent: NonNull<Node<Self::Key, Self::Value>>,
-        link: &mut NodePtr<Self::Key, Self::Value>,
-    );
+    fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: Direction);
     #[allow(dead_code)]
     fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn parent(&self) -> NodePtr<Self::Key, Self::Value>;
@@ -77,12 +79,8 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
-    fn link(
-        &mut self,
-        mut parent: NonNull<Node<Self::Key, Self::Value>>,
-        link: &mut NodePtr<Self::Key, Self::Value>,
-    ) {
-        self.map(|mut v| unsafe { v.as_mut() }.link(unsafe { parent.as_mut() }, link));
+    fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: Direction) {
+        self.map(|mut v| Node::link(unsafe { v.as_mut() }, parent, direction));
     }
 
     #[inline(always)]
