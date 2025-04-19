@@ -48,10 +48,10 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub fn link(node: &mut Self, parent: *mut Node<K, V>, direction: Direction) {
-        node.parent_color = parent;
-        node.left = None;
-        node.right = None;
+    pub fn link(node: *mut Self, parent: *mut Node<K, V>, direction: Direction) {
+        unsafe { node.as_mut().unwrap() }.parent_color = parent;
+        unsafe { node.as_mut().unwrap() }.left = None;
+        unsafe { node.as_mut().unwrap() }.right = None;
         match direction {
             Direction::Left => unsafe { parent.as_mut().unwrap() }.left = NonNull::new(node),
             Direction::Right => unsafe { parent.as_mut().unwrap() }.right = NonNull::new(node),

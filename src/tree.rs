@@ -83,7 +83,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                 }
 
                 let mut node = unsafe { alloc_node(key, value) };
-                node.link(unsafe { parent.as_mut().unwrap() }, direction);
+                node.link(parent, direction);
                 self.root.insert(node.expect("can never be None"));
                 self.len += 1;
                 None

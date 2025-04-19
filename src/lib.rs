@@ -32,6 +32,7 @@ impl From<usize> for Color {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum Direction {
     Left,
     Right,
