@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
 
 use super::{Color, Node, NodePtr, NodePtrExt, Root, TreeCallbacks};
 
@@ -41,7 +41,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                  * first node, or we recursed at Case 1 below and
                  * are no longer violating 4).
                  */
-                node.set_parent_and_color(None, Color::Black);
+                node.set_parent_and_color(ptr::null_mut(), Color::Black);
                 break;
             }
 
@@ -74,11 +74,11 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                      * 4) does not allow this, we need to recurse
                      * at g.
                      */
-                    tmp.set_parent_and_color(gparent, Color::Black);
-                    parent.set_parent_and_color(gparent, Color::Black);
+                    tmp.set_parent_and_color(gparent.ptr(), Color::Black);
+                    parent.set_parent_and_color(gparent.ptr(), Color::Black);
                     node = gparent;
                     parent = node.parent();
-                    node.set_parent_and_color(parent, Color::Red);
+                    node.set_parent_and_color(parent.ptr(), Color::Red);
                     continue;
                 }
 
@@ -101,9 +101,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     parent.set_right(tmp);
                     node.set_left(parent);
                     if tmp.is_some() {
-                        tmp.set_parent_and_color(parent, Color::Black);
+                        tmp.set_parent_and_color(parent.ptr(), Color::Black);
                     }
-                    parent.set_parent_and_color(node, Color::Red);
+                    parent.set_parent_and_color(node.ptr(), Color::Red);
                     self.callbacks.rotate(parent, node);
                     parent = node;
                     tmp = node.right();
@@ -122,7 +122,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 gparent.set_left(tmp); /* == parent->rb_right */
                 parent.set_right(gparent);
                 if tmp.is_some() {
-                    tmp.set_parent_and_color(gparent, Color::Black);
+                    tmp.set_parent_and_color(gparent.ptr(), Color::Black);
                 }
                 self.rotate_set_parents(gparent, parent, Color::Red);
                 self.callbacks.rotate(gparent, parent);
@@ -131,11 +131,11 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 tmp = gparent.left();
                 if tmp.is_red() {
                     /* Case 1 - color flips */
-                    tmp.set_parent_and_color(gparent, Color::Black);
-                    parent.set_parent_and_color(gparent, Color::Black);
+                    tmp.set_parent_and_color(gparent.ptr(), Color::Black);
+                    parent.set_parent_and_color(gparent.ptr(), Color::Black);
                     node = gparent;
                     parent = node.parent();
-                    node.set_parent_and_color(parent, Color::Red);
+                    node.set_parent_and_color(parent.ptr(), Color::Red);
                     continue;
                 }
 
@@ -146,9 +146,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     parent.set_left(tmp);
                     node.set_right(parent);
                     if tmp.is_some() {
-                        tmp.set_parent_and_color(parent, Color::Black);
+                        tmp.set_parent_and_color(parent.ptr(), Color::Black);
                     }
-                    parent.set_parent_and_color(node, Color::Red);
+                    parent.set_parent_and_color(node.ptr(), Color::Red);
                     self.callbacks.rotate(parent, node);
                     parent = node;
                     tmp = node.left();
@@ -158,7 +158,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 gparent.set_right(tmp); /* == parent->rb_left */
                 parent.set_left(gparent);
                 if tmp.is_some() {
-                    tmp.set_parent_and_color(gparent, Color::Black);
+                    tmp.set_parent_and_color(gparent.ptr(), Color::Black);
                 }
                 self.rotate_set_parents(gparent, parent, Color::Red);
                 self.callbacks.rotate(gparent, parent);
@@ -267,8 +267,8 @@ impl<K, V, C> Root<K, V, C> {
         let parent = unsafe { victim.as_ref() }.parent();
         {
             let victim = unsafe { victim.as_mut() };
-            victim.left.set_parent(new);
-            victim.right.set_parent(new);
+            victim.left.set_parent(new.ptr());
+            victim.right.set_parent(new.ptr());
         }
         self.change_child(victim.into(), new, parent);
     }
@@ -358,7 +358,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 child2 = successor.right();
                 parent.set_left(child2);
                 successor.set_right(child);
-                child.set_parent(successor);
+                child.set_parent(successor.ptr());
 
                 self.callbacks.copy(node.into(), successor);
                 self.callbacks.propagate(parent, successor);
@@ -366,13 +366,13 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
 
             tmp = node.left;
             successor.set_left(tmp);
-            tmp.set_parent(successor);
+            tmp.set_parent(successor.ptr());
 
             pc = node.parent_color;
             tmp = Node::from_parent_color(pc);
             self.change_child(node.into(), successor, tmp);
             rebalance = if child2.is_some() {
-                child2.set_parent_and_color(parent, Color::Black);
+                child2.set_parent_and_color(parent.ptr(), Color::Black);
                 None
             } else if successor.is_black() {
                 parent
@@ -419,7 +419,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp1 = sibling.left();
                     parent.set_right(tmp1);
                     sibling.set_left(parent);
-                    tmp1.set_parent_and_color(parent, Color::Black);
+                    tmp1.set_parent_and_color(parent.ptr(), Color::Black);
                     self.rotate_set_parents(parent, sibling, Color::Red);
                     self.callbacks.rotate(parent, sibling);
                     sibling = tmp1;
@@ -443,7 +443,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                          * if it was red, or by recursing at p.
                          * p is red when coming from Case 1.
                          */
-                        sibling.set_parent_and_color(parent, Color::Red);
+                        sibling.set_parent_and_color(parent.ptr(), Color::Red);
                         if parent.is_red() {
                             parent.set_color(Color::Black);
                         } else {
@@ -487,7 +487,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp2.set_right(sibling);
                     parent.set_right(tmp2);
                     if tmp1.is_some() {
-                        tmp1.set_parent_and_color(sibling, Color::Black);
+                        tmp1.set_parent_and_color(sibling.ptr(), Color::Black);
                     }
                     self.callbacks.rotate(sibling, tmp2);
                     tmp1 = sibling;
@@ -508,9 +508,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 tmp2 = sibling.left();
                 parent.set_right(tmp2);
                 sibling.set_left(parent);
-                tmp1.set_parent_and_color(sibling, Color::Black);
+                tmp1.set_parent_and_color(sibling.ptr(), Color::Black);
                 if tmp2.is_some() {
-                    tmp2.set_parent(parent);
+                    tmp2.set_parent(parent.ptr());
                 }
                 self.rotate_set_parents(parent, sibling, Color::Black);
                 self.callbacks.rotate(parent, sibling);
@@ -522,7 +522,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp1 = sibling.right();
                     parent.set_left(tmp1);
                     sibling.set_right(parent);
-                    tmp1.set_parent_and_color(parent, Color::Black);
+                    tmp1.set_parent_and_color(parent.ptr(), Color::Black);
                     self.rotate_set_parents(parent, sibling, Color::Red);
                     self.callbacks.rotate(parent, sibling);
                     sibling = tmp1;
@@ -532,7 +532,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp2 = sibling.right();
                     if tmp2.is_black() {
                         /* Case 2 - sibling color flip */
-                        sibling.set_parent_and_color(parent, Color::Red);
+                        sibling.set_parent_and_color(parent.ptr(), Color::Red);
                         if parent.is_red() {
                             parent.set_color(Color::Black);
                         } else {
@@ -550,7 +550,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp2.set_left(sibling);
                     parent.set_left(tmp2);
                     if tmp1.is_some() {
-                        tmp1.set_parent_and_color(sibling, Color::Black);
+                        tmp1.set_parent_and_color(sibling.ptr(), Color::Black);
                     }
                     self.callbacks.rotate(sibling, tmp2);
                     tmp1 = sibling;
@@ -560,9 +560,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 tmp2 = sibling.right();
                 parent.set_left(tmp2);
                 sibling.set_right(parent);
-                tmp1.set_parent_and_color(sibling, Color::Black);
+                tmp1.set_parent_and_color(sibling.ptr(), Color::Black);
                 if tmp2.is_some() {
-                    tmp2.set_parent(parent);
+                    tmp2.set_parent(parent.ptr());
                 }
                 self.rotate_set_parents(parent, sibling, Color::Black);
                 self.callbacks.rotate(parent, sibling);
@@ -574,6 +574,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
 
 impl<K, V, C> Root<K, V, C> {
     fn change_child(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, parent: NodePtr<K, V>) {
+        // TODO: is this exactly what happens in the kernel?
         if let Some(mut parent) = parent {
             let parent = unsafe { parent.as_mut() };
             if parent.left == old {
@@ -591,11 +592,12 @@ impl<K, V, C> Root<K, V, C> {
     /// - old gets assigned new as a parent and 'color' as a color.
     #[inline]
     fn rotate_set_parents(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, color: Color) {
+        // TODO:  paramas should be NonNull.
         if old.is_some() {
             let old = unsafe { old.unwrap().as_mut() };
             let parent = old.parent();
             unsafe { new.unwrap().as_mut() }.parent_color = old.parent_color;
-            old.set_parent_and_color(new, color);
+            old.set_parent_and_color(new.ptr(), color);
             self.change_child(old.into(), new, parent);
         }
     }

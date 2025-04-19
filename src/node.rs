@@ -1,4 +1,7 @@
-use std::{fmt::Debug, ptr::NonNull};
+use std::{
+    fmt::Debug,
+    ptr::{self, NonNull},
+};
 
 use super::{Color, Node, NodePtr, NodePtrExt};
 
@@ -6,7 +9,7 @@ use super::{Color, Node, NodePtr, NodePtrExt};
 impl<K, V> Node<K, V> {
     pub fn new(key: K, value: V) -> Self {
         Node {
-            parent_color: 0,
+            parent_color: ptr::null_mut(),
             right: None,
             left: None,
             key,
@@ -43,12 +46,11 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub fn link(&mut self, parent: NonNull<Node<K, V>>, link: &mut NodePtr<K, V>) -> usize {
-        self.parent_color = parent.as_ptr() as usize;
+    pub fn link(&mut self, parent: *mut Node<K, V>, link: &mut NodePtr<K, V>) {
+        self.parent_color = parent;
         self.left = None;
         self.right = None;
         *link = Some(self.into());
-        self.parent_color
     }
 
     #[inline(always)]
@@ -91,17 +93,17 @@ impl<K, V> Node<K, V> {
 
     #[inline(always)]
     pub fn parent(&self) -> NodePtr<K, V> {
-        NonNull::new((self.parent_color & !3) as *mut Node<K, V>)
+        Node::from_parent_color(self.parent_color)
     }
 
     #[inline(always)]
-    pub fn from_parent_color(parent_color: usize) -> NodePtr<K, V> {
-        NonNull::new((parent_color & !3) as *mut Node<K, V>)
+    pub(crate) fn from_parent_color(parent_color: *mut Node<K, V>) -> NodePtr<K, V> {
+        NonNull::new(parent_color.map_addr(|p| p & !3))
     }
 
     #[inline(always)]
-    pub fn parent_color(parent_color: usize) -> Color {
-        Color::from(parent_color & 1)
+    pub fn parent_color(parent_color: *mut Node<K, V>) -> Color {
+        Color::from(parent_color.addr() & 1)
     }
 
     #[inline(always)]
@@ -143,31 +145,31 @@ impl<K, V> Node<K, V> {
     /// This is technically [`Self::parent()`] but doesn't reset the color bit.
     #[inline(always)]
     pub fn red_parent(&self) -> NodePtr<K, V> {
-        NonNull::new(self.parent_color as *mut Node<K, V>)
+        NonNull::new(self.parent_color)
     }
 
     #[inline(always)]
-    pub fn set_parent(&mut self, parent: NodePtr<K, V>) {
-        self.parent_color = self.color() as usize + parent.ptr_value();
+    pub fn set_parent(&mut self, parent: *mut Node<K, V>) {
+        self.parent_color = parent.map_addr(|p| p + self.color() as usize);
     }
 
     #[inline(always)]
-    pub fn set_parent_and_color(&mut self, parent: NodePtr<K, V>, color: Color) {
-        self.parent_color = color as usize + parent.ptr_value();
+    pub fn set_parent_and_color(&mut self, parent: *mut Node<K, V>, color: Color) {
+        self.parent_color = parent.map_addr(|p| p + color as usize);
     }
 
     #[inline(always)]
     pub fn set_color(&mut self, color: Color) {
-        self.parent_color = color as usize + self.parent().ptr_value();
+        self.parent_color = self.parent().ptr().map_addr(|p| p + color as usize);
     }
 
-    #[allow(dead_code)]
-    #[inline(always)]
-    pub fn clean(&mut self) {
-        self.parent_color = self as *const _ as usize;
-        self.right = None;
-        self.left = None;
-    }
+    // #[allow(dead_code)]
+    // #[inline(always)]
+    // pub fn clean(&mut self) {
+    //     self.parent_color = self as *mut _;
+    //     self.right = None;
+    //     self.left = None;
+    // }
 
     #[allow(dead_code)]
     #[inline(always)]

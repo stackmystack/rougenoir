@@ -6,7 +6,10 @@ mod root;
 mod set;
 mod tree;
 
-use std::{marker::PhantomData, ptr::NonNull};
+use std::{
+    marker::PhantomData,
+    ptr::{self, NonNull},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Color {
@@ -42,20 +45,20 @@ pub trait NodePtrExt {
         &mut self,
         parent: NonNull<Node<Self::Key, Self::Value>>,
         link: &mut NodePtr<Self::Key, Self::Value>,
-    ) -> usize;
+    );
     #[allow(dead_code)]
     fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn parent(&self) -> NodePtr<Self::Key, Self::Value>;
     #[allow(dead_code)]
     fn prev_node(&self) -> NodePtr<Self::Key, Self::Value>;
-    fn ptr_value(&self) -> usize;
+    fn ptr(&self) -> *mut Node<Self::Key, Self::Value>;
     fn red_parent(&self) -> NodePtr<Self::Key, Self::Value>;
     fn right(&self) -> NodePtr<Self::Key, Self::Value>;
     fn set_color(&mut self, color: Color);
     fn set_left(&mut self, left: NodePtr<Self::Key, Self::Value>);
-    fn set_parent(&mut self, parent: NodePtr<Self::Key, Self::Value>);
-    fn set_parent_and_color(&mut self, parent: NodePtr<Self::Key, Self::Value>, color: Color);
-    fn set_parent_color(&mut self, parent_color: usize);
+    fn set_parent(&mut self, parent: *mut Node<Self::Key, Self::Value>);
+    fn set_parent_and_color(&mut self, parent: *mut Node<Self::Key, Self::Value>, color: Color);
+    fn set_parent_color(&mut self, parent_color: *mut Node<Self::Key, Self::Value>);
     fn set_right(&mut self, right: NodePtr<Self::Key, Self::Value>);
 }
 
@@ -65,7 +68,7 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
 
     #[inline(always)]
     fn is_black(&self) -> bool {
-        self.is_none_or(|v| unsafe { v.as_ref() }.is_black())
+        !self.is_red()
     }
 
     #[inline(always)]
@@ -76,10 +79,10 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     #[inline(always)]
     fn link(
         &mut self,
-        parent: NonNull<Node<Self::Key, Self::Value>>,
+        mut parent: NonNull<Node<Self::Key, Self::Value>>,
         link: &mut NodePtr<Self::Key, Self::Value>,
-    ) -> usize {
-        self.map_or(0, |mut v| unsafe { v.as_mut() }.link(parent, link))
+    ) {
+        self.map(|mut v| unsafe { v.as_mut() }.link(unsafe { parent.as_mut() }, link));
     }
 
     #[inline(always)]
@@ -98,6 +101,11 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
+    fn ptr(&self) -> *mut Node<Self::Key, Self::Value> {
+        self.map_or(ptr::null_mut(), |p| p.as_ptr())
+    }
+
+    #[inline(always)]
     fn red_parent(&self) -> NodePtr<Self::Key, Self::Value> {
         self.map_or(None, |v| unsafe { v.as_ref().red_parent() })
     }
@@ -110,21 +118,21 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
-    fn set_parent(&mut self, parent: NodePtr<Self::Key, Self::Value>) {
+    fn set_parent(&mut self, parent: *mut Node<Self::Key, Self::Value>) {
         if let Some(node) = self {
             unsafe { node.as_mut() }.set_parent(parent);
         }
     }
 
     #[inline(always)]
-    fn set_parent_and_color(&mut self, parent: NodePtr<Self::Key, Self::Value>, color: Color) {
+    fn set_parent_and_color(&mut self, parent: *mut Node<Self::Key, Self::Value>, color: Color) {
         if let Some(node) = self {
             unsafe { node.as_mut() }.set_parent_and_color(parent, color);
         }
     }
 
     #[inline(always)]
-    fn set_parent_color(&mut self, parent_color: usize) {
+    fn set_parent_color(&mut self, parent_color: *mut Node<K, V>) {
         if let Some(node) = self {
             unsafe { node.as_mut() }.parent_color = parent_color;
         }
@@ -133,11 +141,6 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     #[inline(always)]
     fn left(&self) -> NodePtr<Self::Key, Self::Value> {
         self.map_or(None, |v| unsafe { v.as_ref() }.left)
-    }
-
-    #[inline(always)]
-    fn ptr_value(&self) -> usize {
-        self.map_or(0, |v| v.as_ptr() as usize)
     }
 
     #[inline(always)]
@@ -176,7 +179,7 @@ impl<K, V> From<&mut Node<K, V>> for NodePtr<K, V> {
 #[derive(Clone, Copy, PartialEq)]
 pub struct Node<K, V> {
     /// The parent pointer with color information in the lowest bit
-    pub(crate) parent_color: usize,
+    pub(crate) parent_color: *mut Node<K, V>,
     /// Right Child
     pub right: NodePtr<K, V>,
     /// Left Child
@@ -260,22 +263,28 @@ pub struct Set<T, C> {
     tree: Tree<T, (), C>,
 }
 
-/// SAFETY: it leaks; use with dealloc_node.
+/// # Safety
+///
+/// It leaks; use with dealloc_node.
 pub unsafe fn alloc_node<K, V>(key: K, value: V) -> Option<NonNull<Node<K, V>>>
 where
     K: Ord,
 {
-    let mut root_node = NonNull::new(Box::into_raw(Box::new(Node::new(key, value))));
-    root_node.set_parent_color(Color::Black as usize);
-    root_node
+    let mut node = Node::new(key, value);
+    node.set_color(Color::Black);
+    NonNull::new(Box::into_raw(Box::new(node)))
 }
 
-/// SAFETY: it drops; use after alloc_node.
+/// # Safety
+///
+/// It drops; use after alloc_node.
 pub unsafe fn dealloc_node<K, V>(current: *mut Node<K, V>) {
     let _ = unsafe { Box::from_raw(current) };
 }
 
-/// SAFETY: it drops all nodes from the root.
+/// # SAFETY
+///
+/// It drops all nodes from the root.
 /// Pass len = 0 if you're unsure of the length of the # of elements in
 /// your tree.
 pub unsafe fn dealloc_root<K, V, C>(root: &mut Root<K, V, C>, len: usize) {

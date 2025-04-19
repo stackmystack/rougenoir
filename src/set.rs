@@ -22,11 +22,11 @@ impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C> {
     }
 }
 
-impl<T, C: TreeCallbacks<Key = T, Value = ()> + Default> Set<T, C> {
-    fn clear(&mut self) {
-        self.tree.clear();
-    }
-}
+// impl<T, C: TreeCallbacks<Key = T, Value = ()> + Default> Set<T, C> {
+//     fn clear(&mut self) {
+//         self.tree.clear();
+//     }
+// }
 
 impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C> {
     pub fn insert(&mut self, key: T) -> bool
