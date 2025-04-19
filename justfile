@@ -34,6 +34,9 @@ fmt-check:
 
 lint: clippy fmt-check typos
 
+miri:
+  cargo +nightly miri test
+
 release:
   @just build --release
 
@@ -48,4 +51,3 @@ typos:
 
 typos-fix:
   typos --write-changes
-
