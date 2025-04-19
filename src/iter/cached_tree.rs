@@ -1,6 +1,6 @@
 use std::{iter::FusedIterator, marker::PhantomData};
 
-use crate::{CachedTree, TreeCallbacks, NodePtr};
+use crate::{CachedTree, NodePtr, TreeCallbacks};
 
 impl<K, V, C> CachedTree<K, V, C> {
     /// Gets an iterator over the keys of the map, in sorted order.
