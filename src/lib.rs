@@ -1,4 +1,4 @@
-///! A red-black (rouge-noir) tree translated from the linux kernel's implementation of red-black trees.
+//! A red-black (rouge-noir) tree translated from the linux kernel's implementation of red-black trees.
 mod cached_tree;
 mod iter;
 mod node;
