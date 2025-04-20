@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     CachedTree, Direction, Node, NodePtr, NodePtrExt, Noop, Root, TreeCallbacks, dealloc_root,
-    leak_alloc_node,
+    leak_alloc_node, own_back,
 };
 
 impl<K, V> CachedTree<K, V, Noop<K, V>> {
@@ -107,8 +107,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     }
 
     pub(crate) fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
-        // TODO: we have a second place to dealloc. Should we use dealloc_node?
-        let node = unsafe { Box::from_raw(node) };
+        let node = own_back(node);
         let victim = node.as_ref();
         self.root.erase(victim.into());
         self.len -= 1;

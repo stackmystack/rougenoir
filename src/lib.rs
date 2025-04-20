@@ -277,8 +277,8 @@ where
 /// # Safety
 ///
 /// It drops; use after alloc_node.
-pub unsafe fn dealloc_node<K, V>(current: *mut Node<K, V>) {
-    drop(unsafe { Box::from_raw(current) });
+pub fn own_back<K, V>(current: *mut Node<K, V>) -> Box<Node<K, V>> {
+    unsafe { Box::from_raw(current) }
 }
 
 /// # SAFETY
@@ -318,6 +318,6 @@ pub unsafe fn dealloc_root<K, V, C>(root: &mut Root<K, V, C>, len: usize) {
             }
         }
         // SAFETY: Now it's safe to drop
-        unsafe { dealloc_node(current.as_mut()) };
+        unsafe { own_back(current.as_mut()) };
     }
 }
