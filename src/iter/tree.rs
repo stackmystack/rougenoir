@@ -746,6 +746,7 @@ where
         let mut victim = self.next;
         while !victim.is_null() {
             let (key, value, next) = {
+                // SAFETY: guaranteed not null by the while guard.
                 let victim_ref = unsafe { victim.as_ref() }.unwrap();
                 (
                     &victim_ref.key,
@@ -764,7 +765,8 @@ where
         if victim.is_null() {
             None
         } else {
-            Some(self.tree.pop_node(victim.cast_mut()))
+            // SAFETY: guaranteed not null by the if guard.
+            Some(unsafe { self.tree.pop_node(victim.cast_mut()) })
         }
     }
 }

@@ -98,14 +98,19 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 
     pub fn pop_first(&mut self) -> Option<(K, V)> {
-        Some(self.pop_node(self.root.first()?.as_ptr()))
+        let node = self.root.first()?.as_ptr();
+        // SAFETY: guaranteed not null.
+        Some(unsafe { self.pop_node(node) })
     }
 
     pub fn pop_last(&mut self) -> Option<(K, V)> {
-        Some(self.pop_node(self.root.last()?.as_ptr()))
+        let node = self.root.last()?.as_ptr();
+        // SAFETY: guaranteed not null.
+        Some(unsafe { self.pop_node(node) })
     }
 
-    pub(crate) fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
+    pub(crate) unsafe fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
+        // SAFETY: pop_node delegates the safety to the caller; he needs to guarantee a non null ptr.
         let node = unsafe { own_back(node) };
         self.root.erase(node.as_ref().into());
         self.len -= 1;
@@ -117,7 +122,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,
     {
-        Some(self.pop_node(self.find_node(key)?.as_ptr()))
+        let node = self.find_node(key)?.as_ptr();
+        // SAFETY: guaranteed not null.
+        Some(unsafe { self.pop_node(node) })
     }
 }
 
