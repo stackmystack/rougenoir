@@ -276,13 +276,11 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
         let pc;
 
         if tmp.is_none() {
-            /*
-             * Case 1: node to erase has no more than 1 child (easy!)
-             *
-             * Note that if there is one child it must be red due to 5)
-             * and node must be black due to 4). We adjust colors locally
-             * so as to bypass __rb_erase_color() later on.
-             */
+            // Case 1: node to erase has no more than 1 child (easy!)
+            //
+            // Note that if there is one child it must be red due to 5) and node
+            // must be black due to 4). We adjust colors locally so as to bypass
+            // __rb_erase_color() later on.
             pc = node.parent_color;
             parent = Node::from_parent_color(pc);
             self.change_child(node.into(), child, parent);
@@ -296,7 +294,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
             };
             tmp = parent;
         } else if child.is_none() {
-            /* Still case 1, but this time the child is node->rb_left */
+            // Still case 1, but this time the child is node->rb_left
             pc = node.parent_color;
             tmp.set_parent_color(pc);
             parent = Node::from_parent_color(pc);
@@ -309,33 +307,29 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
 
             tmp = child.left();
             if tmp.is_none() {
-                /*
-                 * Case 2: node's successor is its right child
-                 *
-                 *    (n)          (s)
-                 *    / \          / \
-                 *  (x) (s)  ->  (x) (c)
-                 *        \
-                 *        (c)
-                 */
+                // Case 2: node's successor is its right child
+                //
+                //    (n)          (s)
+                //    / \          / \
+                //  (x) (s)  ->  (x) (c)
+                //        \
+                //        (c)
                 parent = successor;
                 child2 = successor.right();
                 self.callbacks.copy(node.into(), successor);
             } else {
-                /*
-                 * Case 3: node's successor is leftmost under
-                 * node's right child subtree
-                 *
-                 *    (n)          (s)
-                 *    / \          / \
-                 *  (x) (y)  ->  (x) (y)
-                 *      /            /
-                 *    (p)          (p)
-                 *    /            /
-                 *  (s)          (c)
-                 *    \
-                 *    (c)
-                 */
+                // Case 3: node's successor is leftmost under
+                // node's right child subtree
+                //
+                //    (n)          (s)
+                //    / \          / \
+                //  (x) (y)  ->  (x) (y)
+                //      /            /
+                //    (p)          (p)
+                //    /            /
+                //  (s)          (c)
+                //    \
+                //    (c)
                 loop {
                     parent = successor;
                     successor = tmp;
@@ -386,25 +380,21 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
         let mut tmp2;
 
         loop {
-            /*
-             * Loop invariants:
-             * - node is black (or NULL on first iteration)
-             * - node is not the root (parent is not NULL)
-             * - All leaf paths going through parent and node have a
-             *   black node count that is 1 lower than other leaf paths.
-             */
+            // Loop invariants:
+            // - node is black (or NULL on first iteration)
+            // - node is not the root (parent is not NULL)
+            // - All leaf paths going through parent and node have a
+            //   black node count that is 1 lower than other leaf paths.
             sibling = parent.right();
             if node != sibling {
                 if sibling.is_red() {
-                    /*
-                     * Case 1 - left rotate at parent
-                     *
-                     *     P               S
-                     *    / \             / \
-                     *   N   s    -->    p   Sr
-                     *      / \         / \
-                     *     Sl  Sr      N   Sl
-                     */
+                    // Case 1 - left rotate at parent
+                    //
+                    //     P               S
+                    //    / \             / \
+                    //   N   s    -->    p   Sr
+                    //      / \         / \
+                    //     Sl  Sr      N   Sl
                     tmp1 = sibling.left();
                     parent.set_right(tmp1);
                     sibling.set_left(parent);
@@ -417,21 +407,18 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 if tmp1.is_black() {
                     tmp2 = sibling.left();
                     if tmp2.is_black() {
-                        /*
-                         * Case 2 - sibling color flip
-                         * (p could be either color here)
-                         *
-                         *    (p)           (p)
-                         *    / \           / \
-                         *   N   S    -->  N   s
-                         *      / \           / \
-                         *     Sl  Sr        Sl  Sr
-                         *
-                         * This leaves us violating 5) which
-                         * can be fixed by flipping p to black
-                         * if it was red, or by recursing at p.
-                         * p is red when coming from Case 1.
-                         */
+                        // Case 2 - sibling color flip
+                        // (p could be either color here)
+                        //
+                        //    (p)           (p)
+                        //    / \           / \
+                        //   N   S    -->  N   s
+                        //      / \           / \
+                        //     Sl  Sr        Sl  Sr
+                        //
+                        // This leaves us violating 5) which can be fixed by
+                        // flipping p to black if it was red, or by recursing at
+                        // p. p is red when coming from Case 1.
                         sibling.set_parent_and_color(parent.ptr(), Color::Red);
                         if parent.is_red() {
                             parent.set_color(Color::Black);
@@ -444,33 +431,30 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                         }
                         break;
                     }
-                    /*
-                     * Case 3 - right rotate at sibling
-                     * (p could be either color here)
-                     *
-                     *   (p)           (p)
-                     *   / \           / \
-                     *  N   S    -->  N   sl
-                     *     / \             \
-                     *    sl  sr            S
-                     *                       \
-                     *                        sr
-                     *
-                     * Note: p might be red, and then both
-                     * p and sl are red after rotation(which
-                     * breaks property 4). This is fixed in
-                     * Case 4 (in __rb_rotate_set_parents()
-                     *         which set sl the color of p
-                     *         and set p RB_BLACK)
-                     *
-                     *   (p)            (sl)
-                     *   / \            /  \
-                     *  N   sl   -->   P    S
-                     *       \        /      \
-                     *        S      N        sr
-                     *         \
-                     *          sr
-                     */
+                    // Case 3 - right rotate at sibling
+                    // (p could be either color here)
+                    //
+                    //   (p)           (p)
+                    //   / \           / \
+                    //  N   S    -->  N   sl
+                    //     / \             \
+                    //    sl  sr            S
+                    //                       \
+                    //                        sr
+                    //
+                    // Note: p might be red, and then both p and sl are red
+                    // after rotation(which breaks property 4). This is fixed in
+                    //
+                    // Case 4 (in __rb_rotate_set_parents() which set sl the
+                    // color of p and set p RB_BLACK)
+                    //
+                    //   (p)            (sl)
+                    //   / \            /  \
+                    //  N   sl   -->   P    S
+                    //       \        /      \
+                    //        S      N        sr
+                    //         \
+                    //          sr
                     tmp1 = tmp2.right();
                     sibling.set_left(tmp1);
                     tmp2.set_right(sibling);
@@ -482,18 +466,15 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp1 = sibling;
                     sibling = tmp2;
                 }
-                /*
-                 * Case 4 - left rotate at parent + color flips
-                 * (p and sl could be either color here.
-                 *  After rotation, p becomes black, s acquires
-                 *  p's color, and sl keeps its color)
-                 *
-                 *      (p)             (s)
-                 *      / \             / \
-                 *     N   S     -->   P   Sr
-                 *        / \         / \
-                 *      (sl) sr      N  (sl)
-                 */
+                // Case 4 - left rotate at parent + color flips
+                // (p and sl could be either color here. After rotation, p
+                // becomes black, s acquires p's color, and sl keeps its color)
+                //
+                //      (p)             (s)
+                //      / \             / \
+                //     N   S     -->   P   Sr
+                //        / \         / \
+                //      (sl) sr      N  (sl)
                 tmp2 = sibling.left();
                 parent.set_right(tmp2);
                 sibling.set_left(parent);
@@ -507,7 +488,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
             } else {
                 sibling = parent.left();
                 if sibling.is_red() {
-                    /* Case 1 - right rotate at parent */
+                    // Case 1 - right rotate at parent
                     tmp1 = sibling.right();
                     parent.set_left(tmp1);
                     sibling.set_right(parent);
@@ -520,7 +501,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 if tmp1.is_black() {
                     tmp2 = sibling.right();
                     if tmp2.is_black() {
-                        /* Case 2 - sibling color flip */
+                        // Case 2 - sibling color flip
                         sibling.set_parent_and_color(parent.ptr(), Color::Red);
                         if parent.is_red() {
                             parent.set_color(Color::Black);
@@ -533,7 +514,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                         }
                         break;
                     }
-                    /* Case 3 - left rotate at sibling */
+                    // Case 3 - left rotate at sibling
                     tmp1 = tmp2.left();
                     sibling.set_right(tmp1);
                     tmp2.set_left(sibling);
@@ -545,7 +526,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp1 = sibling;
                     sibling = tmp2;
                 }
-                /* Case 4 - right rotate at parent + color flips */
+                // Case 4 - right rotate at parent + color flips
                 tmp2 = sibling.right();
                 parent.set_left(tmp2);
                 sibling.set_right(parent);
