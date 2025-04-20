@@ -42,7 +42,7 @@ impl<K, V> Node<K, V> {
     pub fn left_deepest_node(&self) -> NonNull<Node<K, V>> {
         let mut node = self;
         while let Some(next) = node.left.or(node.right) {
-            // SAFETY: by construction.
+            // SAFETY: by if guard, next is never null.
             node = unsafe { next.as_ref() };
         }
         self.into()
@@ -71,7 +71,8 @@ impl<K, V> Node<K, V> {
         // If we have a right-hand child, go down and then left as far as we
         // can.
         if let Some(mut current) = self.right {
-            // SAFETY: by construction, current is valid.
+            // SAFETY: by if guard, current is valid.
+            // SAFETY: current.as_ref is no longer in use.
             while let Some(left) = unsafe { current.as_ref() }.left {
                 current = left;
             }
@@ -148,7 +149,7 @@ impl<K, V> Node<K, V> {
         loop {
             parent = node_ref.parent();
             if parent.is_none() {
-                break; // [5] parent can never be null;
+                break; // [5] when parent is noe, we just [6] return.
             }
 
             if parent // [3] first time it's a left-hand child of its parent.
@@ -156,14 +157,14 @@ impl<K, V> Node<K, V> {
                 .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
                 .unwrap_or(true)
             {
-                break; // [4] said parent is our 'next' node.
+                break; // [4] said parent is our 'next' node, [6] return.
             }
 
             // [2] ancestor is a right-hand child of its parent, keep going up.
-            // SAFETY: by construction, [5] parent can never be null.
+            // SAFETY: by construction, [5] parent can never be None.
             node_ref = unsafe { parent.unwrap().as_ref() };
         }
-        parent
+        parent // [6] return
     }
 
     /// This is technically [`Self::parent()`] but doesn't reset the color bit.
@@ -190,11 +191,11 @@ impl<K, V> Node<K, V> {
     #[allow(dead_code)]
     #[inline(always)]
     pub fn next_postorder(&self) -> NodePtr<K, V> {
-        // SAFETY: by construction, parent in never None.
+        // SAFETY: by if guard, via op ?, parent is never None.
         let parent = unsafe { self.parent()?.as_ref() };
         if let (Some(left), Some(right)) = (parent.left, parent.right) {
             // If we're sitting on node, we've already seen our children
-            // SAFETY: by the if guard, both left and right are valid.
+            // SAFETY: by if guard, both left and right are valid.
             unsafe {
                 if std::ptr::eq(self, left.as_ref()) {
                     // If we are the parent's left node, go to the parent's right
