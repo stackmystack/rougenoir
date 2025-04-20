@@ -31,26 +31,19 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
         let mut tmp;
 
         loop {
-            /*
-             * Loop invariant: node is red.
-             */
+            // Loop invariant: node is red.
+            //
             // TODO: unlikely hint, but it's nightly only.
             if parent.is_none() {
-                /*
-                 * The inserted node is root. Either this is the
-                 * first node, or we recursed at Case 1 below and
-                 * are no longer violating 4).
-                 */
+                // The inserted node is root. Either this is the first node, or
+                // we recursed at Case 1 below and are no longer violating 4).
                 node.set_parent_and_color(ptr::null_mut(), Color::Black);
                 break;
             }
 
-            /*
-             * If there is a black parent, we are done.
-             * Otherwise, take some corrective action as,
-             * per 4), we don't want a red root or two
-             * consecutive red nodes.
-             */
+            // If there is a black parent, we are done. Otherwise, take some
+            // corrective action as, per 4), we don't want a red root or two
+            // consecutive red nodes.
             if parent.is_black() {
                 break;
             }
@@ -59,21 +52,18 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
             tmp = gparent.right();
 
             if parent != tmp {
-                /* parent == gparent->rb_left */
+                // parent == gparent->rb_left
                 if tmp.is_red() {
-                    /*
-                     * Case 1 - node's uncle is red (color flips).
-                     *
-                     *       G            g
-                     *      / \          / \
-                     *     p   u  -->   P   U
-                     *    /            /
-                     *   n            n
-                     *
-                     * However, since g's parent might be red, and
-                     * 4) does not allow this, we need to recurse
-                     * at g.
-                     */
+                    // Case 1 - node's uncle is red (color flips).
+                    //
+                    //       G            g
+                    //      / \          / \
+                    //     p   u  -->   P   U
+                    //    /            /
+                    //   n            n
+                    //
+                    // However, since g's parent might be red, and 4) does not
+                    // allow this, we need to recurse at g.
                     tmp.set_parent_and_color(gparent.ptr(), Color::Black);
                     parent.set_parent_and_color(gparent.ptr(), Color::Black);
                     node = gparent;
@@ -84,19 +74,17 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
 
                 tmp = parent.right();
                 if node == tmp {
-                    /*
-                     * Case 2 - node's uncle is black and node is
-                     * the parent's right child (left rotate at parent).
-                     *
-                     *      G             G
-                     *     / \           / \
-                     *    p   U  -->    n   U
-                     *     \           /
-                     *      n         p
-                     *
-                     * This still leaves us in violation of 4), the
-                     * continuation into Case 3 will fix that.
-                     */
+                    // Case 2 - node's uncle is black and node is the parent's
+                    // right child (left rotate at parent).
+                    //
+                    //      G             G
+                    //     / \           / \
+                    //    p   U  -->    n   U
+                    //     \           /
+                    //      n         p
+                    //
+                    // This still leaves us in violation of 4), the continuation
+                    // into Case 3 will fix that.
                     tmp = node.left();
                     parent.set_right(tmp);
                     node.set_left(parent);
@@ -109,16 +97,14 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp = node.right();
                 }
 
-                /*
-                 * Case 3 - node's uncle is black and node is
-                 * the parent's left child (right rotate at gparent).
-                 *
-                 *        G           P
-                 *       / \         / \
-                 *      p   U  -->  n   g
-                 *     /                 \
-                 *    n                   U
-                 */
+                // Case 3 - node's uncle is black and node is
+                // the parent's left child (right rotate at gparent).
+                //
+                //        G           P
+                //       / \         / \
+                //      p   U  -->  n   g
+                //     /                 \
+                //    n                   U
                 gparent.set_left(tmp); /* == parent->rb_right */
                 parent.set_right(gparent);
                 if tmp.is_some() {
@@ -130,7 +116,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
             } else {
                 tmp = gparent.left();
                 if tmp.is_red() {
-                    /* Case 1 - color flips */
+                    // Case 1 - color flips
                     tmp.set_parent_and_color(gparent.ptr(), Color::Black);
                     parent.set_parent_and_color(gparent.ptr(), Color::Black);
                     node = gparent;
@@ -141,7 +127,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
 
                 tmp = parent.left();
                 if node == tmp {
-                    /* Case 2 - right rotate at parent */
+                    // Case 2 - right rotate at parent
                     tmp = node.right();
                     parent.set_left(tmp);
                     node.set_right(parent);
@@ -154,8 +140,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp = node.left();
                 }
 
-                /* Case 3 - left rotate at gparent */
-                gparent.set_right(tmp); /* == parent->rb_left */
+                // Case 3 - left rotate at gparent
+                gparent.set_right(tmp); // == parent->rb_left
                 parent.set_left(gparent);
                 if tmp.is_some() {
                     tmp.set_parent_and_color(gparent.ptr(), Color::Black);
@@ -258,6 +244,7 @@ impl<K, V, C> Root<K, V, C> {
 
     pub fn last(&self) -> NodePtr<K, V> {
         let mut n = self.node?;
+        // SAFETY: by if guard, via op ?, n is never null.
         while let Some(right) = unsafe { n.as_ref() }.right {
             n = right;
         }
