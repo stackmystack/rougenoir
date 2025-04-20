@@ -277,7 +277,7 @@ where
 /// # Safety
 ///
 /// It drops; use after alloc_node.
-pub fn own_back<K, V>(current: *mut Node<K, V>) -> Box<Node<K, V>> {
+pub unsafe fn own_back<K, V>(current: *mut Node<K, V>) -> Box<Node<K, V>> {
     unsafe { Box::from_raw(current) }
 }
 

@@ -98,7 +98,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 
     pub(crate) fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
-        let node = own_back(node);
+        let node = unsafe { own_back(node) };
         self.root.erase(node.as_ref().into());
         self.len -= 1;
         (node.key, node.value)
