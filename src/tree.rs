@@ -63,21 +63,19 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                 let mut direction = Direction::None;
                 while !current_node.is_null() {
                     parent = current_node;
-                    match key.cmp(&unsafe { current_node.as_ref().unwrap() }.key) {
+                    let current_ref = unsafe { current_node.as_mut().unwrap() };
+                    match key.cmp(&current_ref.key) {
                         Equal => {
-                            let res = std::mem::replace(
-                                &mut unsafe { current_node.as_mut().unwrap() }.value,
-                                value,
-                            );
+                            let res = std::mem::replace(&mut current_ref.value, value);
                             return Some(res);
                         }
                         Greater => {
                             direction = Direction::Right;
-                            current_node = unsafe { current_node.as_ref().unwrap() }.right.ptr();
+                            current_node = current_ref.right.ptr();
                         }
                         Less => {
                             direction = Direction::Left;
-                            current_node = unsafe { current_node.as_ref().unwrap() }.left.ptr();
+                            current_node = current_ref.left.ptr();
                         }
                     };
                 }
