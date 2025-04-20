@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    CachedTree, Direction, Node, NodePtr, NodePtrExt, Noop, Root, TreeCallbacks, dealloc_root,
+    CachedTree, ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, TreeCallbacks, dealloc_root,
     leak_alloc_node, own_back,
 };
 
@@ -66,7 +66,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                 // [1] replace an existing value or ([2] prepare for linking and [3] link)
                 let mut current_node = self.root.node.ptr();
                 let mut parent = current_node;
-                let mut direction = Direction::None;
+                let mut direction = ComingFrom::Left; // We don't really care, but rust does.
                 while !current_node.is_null() {
                     // [4] parent is never null by construction.
                     parent = current_node;
@@ -82,12 +82,12 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                         }
                         Greater => {
                             // [2] prepare for linking on the right of parent.
-                            direction = Direction::Right;
+                            direction = ComingFrom::Right;
                             current_node = current_ref.right.ptr();
                         }
                         Less => {
                             // [2] prepare for linking on the left of parent.
-                            direction = Direction::Left;
+                            direction = ComingFrom::Left;
                             current_node = current_ref.left.ptr();
                         }
                     };
@@ -101,7 +101,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                 unsafe { node.link(parent, direction) };
                 self.root.insert(node.expect("can never be None"));
                 self.len += 1;
-                if matches!(direction, Direction::Left) {
+                if matches!(direction, ComingFrom::Left) {
                     self.leftmost = node;
                 }
                 None

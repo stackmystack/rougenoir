@@ -3,7 +3,7 @@ use std::{
     ptr::{self, NonNull},
 };
 
-use crate::Direction;
+use crate::ComingFrom;
 
 use super::{Color, Node, NodePtr, NodePtrExt};
 
@@ -48,7 +48,7 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub unsafe fn link(node: *mut Self, parent: *mut Node<K, V>, direction: Direction) {
+    pub unsafe fn link(node: *mut Self, parent: *mut Node<K, V>, direction: ComingFrom) {
         // SAFETY: link delegates the safety of this call to the caller.
         // SAFETY: node is guaranteed not null by the caller, but we still can't
         // [1] get a &mut to parent untill we finish from [2] assigning parent_color.
@@ -60,11 +60,8 @@ impl<K, V> Node<K, V> {
         // [1] get a &mut parent
         let parent = unsafe { parent.as_mut().unwrap() };
         match direction {
-            Direction::Left => parent.left = node.into(),
-            Direction::Right => parent.right = node.into(),
-            // SAFETY: If we ever get here, it means we abused the Direction
-            // API, the caller is responsible for it.
-            _ => unreachable!(),
+            ComingFrom::Left => parent.left = node.into(),
+            ComingFrom::Right => parent.right = node.into(),
         };
     }
 

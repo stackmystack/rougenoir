@@ -33,10 +33,9 @@ impl From<usize> for Color {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum Direction {
+pub enum ComingFrom {
     Left,
     Right,
-    None,
 }
 
 pub type NodePtr<K, V> = Option<NonNull<Node<K, V>>>;
@@ -48,7 +47,7 @@ pub trait NodePtrExt {
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
     fn left(&self) -> NodePtr<Self::Key, Self::Value>;
-    unsafe fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: Direction);
+    unsafe fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: ComingFrom);
     #[allow(dead_code)]
     fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn parent(&self) -> NodePtr<Self::Key, Self::Value>;
@@ -80,7 +79,7 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
-    unsafe fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: Direction) {
+    unsafe fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: ComingFrom) {
         self.map(|mut v| unsafe { Node::link(v.as_mut(), parent, direction) });
     }
 
@@ -287,10 +286,6 @@ pub unsafe fn own_back<K, V>(current: *mut Node<K, V>) -> Box<Node<K, V>> {
 /// Pass len = 0 if you're unsure of the length of the # of elements in
 /// your tree.
 pub unsafe fn dealloc_root<K, V, C>(root: &mut Root<K, V, C>, len: usize) {
-    enum ComingFrom {
-        Left,
-        Right,
-    }
     let mut parent = root.node;
     let mut direction = Vec::new();
     // max depth = 2 × log₂(n+1)
