@@ -265,7 +265,7 @@ pub struct Set<T, C> {
 /// # Safety
 ///
 /// It leaks; use with dealloc_node.
-pub unsafe fn alloc_node<K, V>(key: K, value: V) -> Option<NonNull<Node<K, V>>>
+pub unsafe fn leak_alloc_node<K, V>(key: K, value: V) -> Option<NonNull<Node<K, V>>>
 where
     K: Ord,
 {

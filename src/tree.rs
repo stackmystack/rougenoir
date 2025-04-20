@@ -6,7 +6,8 @@ use std::{
 };
 
 use crate::{
-    Direction, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks, alloc_node, dealloc_root,
+    Direction, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks, dealloc_root,
+    leak_alloc_node,
 };
 
 impl<K, V> Tree<K, V, Noop<K, V>> {
@@ -52,7 +53,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     {
         match self.root.node {
             None => {
-                self.root.node = unsafe { alloc_node(key, value) };
+                self.root.node = unsafe { leak_alloc_node(key, value) };
                 self.len += 1;
                 None
             }
@@ -81,7 +82,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                     };
                 }
 
-                let mut node = unsafe { alloc_node(key, value) };
+                let mut node = unsafe { leak_alloc_node(key, value) };
                 node.link(parent, direction);
                 self.root.insert(node.expect("can never be None"));
                 self.len += 1;

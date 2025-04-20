@@ -6,8 +6,8 @@ use std::{
 };
 
 use crate::{
-    CachedTree, Direction, Node, NodePtr, NodePtrExt, Noop, Root, TreeCallbacks, alloc_node,
-    dealloc_root,
+    CachedTree, Direction, Node, NodePtr, NodePtrExt, Noop, Root, TreeCallbacks, dealloc_root,
+    leak_alloc_node,
 };
 
 impl<K, V> CachedTree<K, V, Noop<K, V>> {
@@ -56,7 +56,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     {
         match self.root.node {
             None => {
-                self.root.node = unsafe { alloc_node(key, value) };
+                self.root.node = unsafe { leak_alloc_node(key, value) };
                 self.len += 1;
                 self.leftmost = self.root.node;
                 None
@@ -86,7 +86,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                     };
                 }
 
-                let mut node = unsafe { alloc_node(key, value) };
+                let mut node = unsafe { leak_alloc_node(key, value) };
                 node.link(parent, direction);
                 self.root.insert(node.expect("can never be None"));
                 self.len += 1;
