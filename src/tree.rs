@@ -6,8 +6,8 @@ use std::{
 };
 
 use crate::{
-    ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks, dealloc_root,
-    leak_alloc_node, own_back,
+    ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks, leak_alloc_node,
+    own_back,
 };
 
 impl<K, V> Tree<K, V, Noop<K, V>> {
@@ -240,7 +240,7 @@ impl<K, V, C> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
         // SAFETY: we're literally in drop.
         unsafe {
-            dealloc_root(&mut self.root, self.len);
+            Root::dealloc(&mut self.root, self.len);
         }
     }
 }

@@ -6,8 +6,8 @@ use std::{
 };
 
 use crate::{
-    CachedTree, ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, TreeCallbacks, dealloc_root,
-    leak_alloc_node, own_back,
+    CachedTree, ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, TreeCallbacks, leak_alloc_node,
+    own_back,
 };
 
 impl<K, V> CachedTree<K, V, Noop<K, V>> {
@@ -257,7 +257,7 @@ impl<K, V, C> Drop for CachedTree<K, V, C> {
     fn drop(&mut self) {
         // SAFETY: we're literally in drop.
         unsafe {
-            dealloc_root(&mut self.root, self.len);
+            Root::dealloc(&mut self.root, self.len);
         }
     }
 }
