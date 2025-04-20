@@ -39,7 +39,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
 impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> CachedTree<K, V, C> {
     pub fn clear(&mut self) {
         drop(CachedTree {
-            leftmost: None,
+            leftmost: mem::replace(&mut self.leftmost, None),
             len: mem::replace(&mut self.len, 0),
             root: Root {
                 callbacks: mem::take(&mut self.root.callbacks),
