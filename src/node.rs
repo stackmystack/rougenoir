@@ -42,6 +42,7 @@ impl<K, V> Node<K, V> {
     pub fn left_deepest_node(&self) -> NodePtr<K, V> {
         let mut node = self;
         while let Some(next) = node.left.or(node.right) {
+            // SAFETY: by construction.
             node = unsafe { next.as_ref() };
         }
         Some(node.into())
@@ -51,8 +52,8 @@ impl<K, V> Node<K, V> {
     pub unsafe fn link(node: *mut Self, parent: *mut Node<K, V>, direction: ComingFrom) {
         // SAFETY: link delegates the safety of this call to the caller.
         // SAFETY: node is guaranteed not null by the caller, but we still can't
-        // [1] get a &mut to parent untill we finish from [2] assigning parent_color.
-        // Thanks miri.
+        // [1] get a &mut to parent untill we finish from [2] assigning
+        // parent_color. Thanks miri.
         let node = unsafe { node.as_mut().unwrap() };
         node.parent_color = parent; // [2] assigning parent_color
         node.left = None;
@@ -67,37 +68,41 @@ impl<K, V> Node<K, V> {
 
     #[inline(always)]
     pub fn next(&self) -> NodePtr<K, V> {
-        /*
-         * If we have a right-hand child, go down and then left as far
-         * as we can.
-         */
+        // If we have a right-hand child, go down and then left as far as we
+        // can.
         if let Some(mut current) = self.right {
+            // SAFETY: by construction, current is valid.
             while let Some(left) = unsafe { current.as_ref() }.left {
                 current = left;
             }
             return Some(current);
         }
-        /*
-         * No right-hand children. Everything down and left is smaller than us,
-         * so any 'next' node must be in the general direction of our parent.
-         * Go up the tree; any time the ancestor is a right-hand child of its
-         * parent, keep going up. First time it's a left-hand child of its
-         * parent, said parent is our 'next' node.
-         */
+        // No right-hand children. Everything down and left is smaller than us,
+        // so any 'next' node must be in the general direction of our parent.
+        //
+        // [1] Go up the tree
+        //     [2] any time the ancestor is a right-hand child of its parent,
+        //         keep going up.
+        //     [3] First time it's a left-hand child of its parent, [4] said
+        //         parent is our 'next' node.
         let mut node_ref = self;
         let mut parent;
         loop {
             parent = node_ref.parent();
             if parent.is_none() {
-                break;
+                break; // [5] parent can never be null;
             }
-            if parent
+
+            if parent // [3] first time it's a left-hand child of its parent.
                 .right()
                 .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
                 .unwrap_or(true)
             {
-                break;
+                break; // [4] said parent is our 'next' node.
             }
+
+            // [2] ancestor is a right-hand child of its parent, keep going up.
+            // SAFETY: by construction, [5] parent can never be null.
             node_ref = unsafe { parent.unwrap().as_ref() };
         }
         parent
@@ -120,35 +125,42 @@ impl<K, V> Node<K, V> {
 
     #[inline(always)]
     pub fn prev(&self) -> NodePtr<K, V> {
-        /*
-         * If we have a left-hand child, go down and then right as far
-         * as we can.
-         */
+        // If we have a left-hand child, go down and then right as far as we
+        // can.
         if let Some(mut current) = self.left {
+            // SAFETY: by construction, current is valid.
             while let Some(right) = unsafe { current.as_ref() }.right {
                 current = right;
             }
             return Some(current);
         }
 
-        /*
-         * No left-hand children. Go up till we find an ancestor which
-         * is a right-hand child of its parent.
-         */
+        // No left-hand children. Everything down and left is smaller than us,
+        // so any 'next' node must be in the general direction of our parent.
+        //
+        // [1] Go up the tree
+        //     [2] any time the ancestor is a left-hand child of its parent,
+        //         keep going up.
+        //     [3] First time it's a right-hand child of its parent, [4] said
+        //         parent is our 'next' node.
         let mut node_ref = self;
         let mut parent;
         loop {
             parent = node_ref.parent();
             if parent.is_none() {
-                break;
+                break; // [5] parent can never be null;
             }
-            if parent
+
+            if parent // [3] first time it's a left-hand child of its parent.
                 .left()
                 .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
                 .unwrap_or(true)
             {
-                break;
+                break; // [4] said parent is our 'next' node.
             }
+
+            // [2] ancestor is a right-hand child of its parent, keep going up.
+            // SAFETY: by construction, [5] parent can never be null.
             node_ref = unsafe { parent.unwrap().as_ref() };
         }
         parent
