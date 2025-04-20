@@ -150,6 +150,7 @@ impl<K, V, C> Tree<K, V, C> {
     {
         let mut node = self.root.node;
         while let Some(candidate) = node {
+            // SAFETY: by construction, candidate is valid.
             let candidate = unsafe { candidate.as_ref() };
             match key.cmp(candidate.key.borrow()) {
                 Equal => break,
@@ -161,11 +162,13 @@ impl<K, V, C> Tree<K, V, C> {
     }
 
     pub fn first(&self) -> Option<&V> {
+        // SAFETY: by construction, n is valid.
         self.root.first().map(|e| &unsafe { e.as_ref() }.value)
     }
 
     pub fn first_key_value(&self) -> Option<(&K, &V)> {
         self.root.first().map(|n| {
+            // SAFETY: by construction, n is valid.
             let n = unsafe { n.as_ref() };
             (&n.key, &n.value)
         })
@@ -176,6 +179,7 @@ impl<K, V, C> Tree<K, V, C> {
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,
     {
+        // SAFETY: by construction, n is valid.
         self.find_node(key).map(|n| &unsafe { n.as_ref() }.value)
     }
 
@@ -185,6 +189,7 @@ impl<K, V, C> Tree<K, V, C> {
         Q: Ord + ?Sized,
     {
         self.find_node(key).map(|n| {
+            // SAFETY: by construction, n is valid.
             let n = unsafe { n.as_ref() };
             (&n.key, &n.value)
         })
@@ -195,11 +200,13 @@ impl<K, V, C> Tree<K, V, C> {
     }
 
     pub fn last(&self) -> Option<&V> {
+        // SAFETY: by construction, n is valid.
         self.root.last().map(|n| &unsafe { n.as_ref() }.value)
     }
 
     pub fn last_key_value(&self) -> Option<(&K, &V)> {
         self.root.last().map(|n| {
+            // SAFETY: by construction, n is valid.
             let n = unsafe { n.as_ref() };
             (&n.key, &n.value)
         })
@@ -230,6 +237,7 @@ where
 
 impl<K, V, C> Drop for Tree<K, V, C> {
     fn drop(&mut self) {
+        // SAFETY: we're literally in drop.
         unsafe {
             dealloc_root(&mut self.root, self.len);
         }
