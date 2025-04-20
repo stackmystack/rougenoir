@@ -53,33 +53,41 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     {
         match self.root.node {
             None => {
+                // SAFETY: root doesn't exist, so we create a new one.
                 self.root.node = unsafe { leak_alloc_node(key, value) };
                 self.len += 1;
                 None
             }
             Some(_) => {
+                // [1] replace an existing value or ([2] prepare for linking and [3] link).
                 let mut current_node = self.root.node.ptr();
                 let mut parent = current_node;
                 let mut direction = Direction::None;
                 while !current_node.is_null() {
                     parent = current_node;
+                    // SAFETY: guaranteed not null by the while guard.
                     let current_ref = unsafe { current_node.as_mut().unwrap() };
                     match key.cmp(&current_ref.key) {
                         Equal => {
-                            let res = std::mem::replace(&mut current_ref.value, value);
-                            return Some(res);
+                            // [1] replace an existing value.
+                            return Some(std::mem::replace(&mut current_ref.value, value));
                         }
                         Greater => {
+                            // [2] prepare for linking on the right of parent.
                             direction = Direction::Right;
                             current_node = current_ref.right.ptr();
                         }
                         Less => {
+                            // [2] prepare for linking on the left of parent.
                             direction = Direction::Left;
                             current_node = current_ref.left.ptr();
                         }
                     };
                 }
 
+                // [3] link.
+
+                // SAFETY: we're owning (k,v)
                 let mut node = unsafe { leak_alloc_node(key, value) };
                 node.link(parent, direction);
                 self.root.insert(node.expect("can never be None"));
