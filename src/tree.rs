@@ -3,7 +3,6 @@ use std::{
     cmp::Ordering::{self, *},
     mem,
     ops::Index,
-    ptr::NonNull,
 };
 
 use crate::{
@@ -92,19 +91,19 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 
     pub fn pop_first(&mut self) -> Option<(K, V)> {
-        Some(self.pop_node(self.root.first()?))
+        Some(self.pop_node(self.root.first()?.as_ptr()))
     }
 
     pub fn pop_last(&mut self) -> Option<(K, V)> {
-        Some(self.pop_node(self.root.last()?))
+        Some(self.pop_node(self.root.last()?.as_ptr()))
     }
 
-    fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> (K, V) {
-        self.root.erase(node);
+    pub(crate) fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
         // TODO: we have a second place to dealloc. Should we use dealloc_node?
-        let first_node = *unsafe { Box::from_raw(node.as_ptr()) };
+        let node = unsafe { Box::from_raw(node) };
+        self.root.erase(node.as_ref().into());
         self.len -= 1;
-        (first_node.key, first_node.value)
+        (node.key, node.value)
     }
 
     pub fn remove<Q>(&mut self, key: &Q) -> Option<(K, V)>
@@ -112,7 +111,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,
     {
-        Some(self.pop_node(self.find_node(key)?))
+        Some(self.pop_node(self.find_node(key)?.as_ptr()))
     }
 }
 

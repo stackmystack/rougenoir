@@ -1,6 +1,10 @@
-use std::{iter::FusedIterator, marker::PhantomData};
+use std::{
+    iter::FusedIterator,
+    marker::PhantomData,
+    ptr::{self},
+};
 
-use crate::{NodePtr, Tree, TreeCallbacks};
+use crate::{Node, NodePtr, Tree, TreeCallbacks};
 
 impl<K, V, C> Tree<K, V, C> {
     /// Gets an iterator over the keys of the map, in sorted order.
@@ -117,11 +121,11 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     pub fn extract_if<F>(&mut self, pred: F) -> ExtractIf<'_, K, V, C, F>
     where
         K: Ord,
-        F: FnMut(&K, &mut V) -> bool,
+        F: FnMut(&K, &V) -> bool,
     {
         ExtractIf {
             pred,
-            next: self.root.first(),
+            next: self.root.first().map_or(ptr::null(), |n| n.as_ptr()),
             tree: self,
         }
     }
@@ -191,7 +195,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     pub fn retain<F>(&mut self, mut f: F)
     where
         K: Ord,
-        F: FnMut(&K, &mut V) -> bool,
+        F: FnMut(&K, &V) -> bool,
     {
         self.extract_if(|k, v| !f(k, v)).for_each(drop);
     }
@@ -723,32 +727,45 @@ impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V> + Default> FromIterator<(K,
 pub struct ExtractIf<'a, K, V, C, F>
 where
     C: TreeCallbacks<Key = K, Value = V>,
-    F: 'a + FnMut(&K, &mut V) -> bool,
+    F: 'a + FnMut(&K, &V) -> bool,
 {
     pred: F,
     tree: &'a mut Tree<K, V, C>,
-    next: NodePtr<K, V>,
+    next: *const Node<K, V>,
 }
 
 impl<'a, K, V, C, F> Iterator for ExtractIf<'a, K, V, C, F>
 where
     K: Ord,
     C: TreeCallbacks<Key = K, Value = V>,
-    F: 'a + FnMut(&K, &mut V) -> bool,
+    F: 'a + FnMut(&K, &V) -> bool,
 {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
-        let mut res = None;
-        while let Some(mut next_ref) = self.next {
-            let next_ref = unsafe { next_ref.as_mut() };
-            self.next = next_ref.next();
-            if (self.pred)(&next_ref.key, &mut next_ref.value) {
-                res = Some(next_ref);
+        let mut victim = self.next;
+        while !victim.is_null() {
+            let (key, value, next) = {
+                let victim_ref = unsafe { victim.as_ref() }.unwrap();
+                (
+                    &victim_ref.key,
+                    &victim_ref.value,
+                    victim_ref.next().map_or(ptr::null(), |n| n.as_ptr()),
+                )
+            };
+
+            self.next = next;
+            if (self.pred)(key, value) {
                 break;
             }
+            victim = self.next;
         }
-        res.map(|f| self.tree.remove(&f.key)).flatten()
+
+        if victim.is_null() {
+            None
+        } else {
+            Some(self.tree.pop_node(victim.cast_mut()))
+        }
     }
 }
 

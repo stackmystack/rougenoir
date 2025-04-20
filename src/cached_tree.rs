@@ -3,7 +3,6 @@ use std::{
     cmp::Ordering::{self, *},
     mem,
     ops::Index,
-    ptr::NonNull,
 };
 
 use crate::{
@@ -100,21 +99,23 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     }
 
     pub fn pop_first(&mut self) -> Option<(K, V)> {
-        Some(self.pop_node(self.root.first()?))
+        Some(self.pop_node(self.root.first()?.as_ptr()))
     }
 
     pub fn pop_last(&mut self) -> Option<(K, V)> {
-        Some(self.pop_node(self.root.last()?))
+        Some(self.pop_node(self.root.last()?.as_ptr()))
     }
 
-    fn pop_node(&mut self, node: NonNull<Node<K, V>>) -> (K, V) {
-        self.root.erase(node);
-        if self.leftmost.is_some_and(|l| l == node) {
-            self.leftmost = unsafe { node.as_ref() }.next();
-        }
-        let first_node = *unsafe { Box::from_raw(node.as_ptr()) };
+    pub(crate) fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
+        // TODO: we have a second place to dealloc. Should we use dealloc_node?
+        let node = unsafe { Box::from_raw(node) };
+        let victim = node.as_ref();
+        self.root.erase(victim.into());
         self.len -= 1;
-        (first_node.key, first_node.value)
+        if self.leftmost == victim.into() {
+            self.leftmost = node.next();
+        }
+        (node.key, node.value)
     }
 
     pub fn remove<Q>(&mut self, key: &Q) -> Option<(K, V)>
@@ -122,7 +123,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,
     {
-        Some(self.pop_node(self.find_node(key)?))
+        Some(self.pop_node(self.find_node(key)?.as_ptr()))
     }
 }
 
