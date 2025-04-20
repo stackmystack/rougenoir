@@ -591,7 +591,6 @@ impl<K, V, C> Root<K, V, C> {
     /// - old gets assigned new as a parent and 'color' as a color.
     #[inline]
     fn rotate_set_parents(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, color: Color) {
-        // TODO:  paramas should be NonNull.
         if old.is_some() {
             let old = unsafe { old.unwrap().as_mut() };
             let parent = old.parent();
