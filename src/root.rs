@@ -575,10 +575,16 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
 }
 
 impl<K, V, C> Root<K, V, C> {
-    fn change_child(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, parent: NodePtr<K, V>) {
+    fn change_child(
+        &mut self,
+        old: NonNull<Node<K, V>>,
+        new: NodePtr<K, V>,
+        parent: NodePtr<K, V>,
+    ) {
         if let Some(mut parent) = parent {
+            // SAFETY: by if guard, parent is never null.
             let parent = unsafe { parent.as_mut() };
-            if parent.left == old {
+            if parent.left == old.into() {
                 parent.left = new;
             } else {
                 parent.right = new;
