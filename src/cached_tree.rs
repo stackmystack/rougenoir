@@ -63,12 +63,15 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                 None
             }
             Some(_) => {
-                // [1] replace an existing value or ([2] prepare for linking and [3] link).
+                // [1] replace an existing value or ([2] prepare for linking and [3] link)
                 let mut current_node = self.root.node.ptr();
                 let mut parent = current_node;
                 let mut direction = Direction::None;
                 while !current_node.is_null() {
+                    // [4] parent is never null by construction.
                     parent = current_node;
+                    #[allow(unused_variables)]
+                    let parent = parent;
 
                     // SAFETY: guaranteed not null by the while guard.
                     let current_ref = unsafe { current_node.as_mut().unwrap() };
@@ -94,7 +97,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
 
                 // SAFETY: we're owning (k,v)
                 let mut node = unsafe { leak_alloc_node(key, value) };
-                node.link(parent, direction);
+                // SAFETY: [4] parent is never null by construction.
+                unsafe { node.link(parent, direction) };
                 self.root.insert(node.expect("can never be None"));
                 self.len += 1;
                 if matches!(direction, Direction::Left) {

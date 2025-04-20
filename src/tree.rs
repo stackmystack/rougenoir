@@ -64,7 +64,11 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                 let mut parent = current_node;
                 let mut direction = Direction::None;
                 while !current_node.is_null() {
+                    // [4] parent is never null by construction.
                     parent = current_node;
+                    #[allow(unused_variables)]
+                    let parent = parent;
+
                     // SAFETY: guaranteed not null by the while guard.
                     let current_ref = unsafe { current_node.as_mut().unwrap() };
                     match key.cmp(&current_ref.key) {
@@ -89,8 +93,10 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
 
                 // SAFETY: we're owning (k,v)
                 let mut node = unsafe { leak_alloc_node(key, value) };
-                node.link(parent, direction);
-                self.root.insert(node.expect("can never be None"));
+                // SAFETY: [4] parent is never null by construction.
+                unsafe { node.link(parent, direction) };
+                // SAFETY: node is definitely non null at this stage.
+                self.root.insert(unsafe { node.unwrap_unchecked() });
                 self.len += 1;
                 None
             }

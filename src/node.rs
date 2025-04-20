@@ -48,13 +48,22 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub fn link(node: *mut Self, parent: *mut Node<K, V>, direction: Direction) {
-        unsafe { node.as_mut().unwrap() }.parent_color = parent;
-        unsafe { node.as_mut().unwrap() }.left = None;
-        unsafe { node.as_mut().unwrap() }.right = None;
+    pub unsafe fn link(node: *mut Self, parent: *mut Node<K, V>, direction: Direction) {
+        // SAFETY: link delegates the safety of this call to the caller.
+        // SAFETY: node is guaranteed not null by the caller, but we still can't
+        // [1] get a &mut to parent untill we finish from [2] assigning parent_color.
+        // Thanks miri.
+        let node = unsafe { node.as_mut().unwrap() };
+        node.parent_color = parent; // [2] assigning parent_color
+        node.left = None;
+        node.right = None;
+        // [1] get a &mut parent
+        let parent = unsafe { parent.as_mut().unwrap() };
         match direction {
-            Direction::Left => unsafe { parent.as_mut().unwrap() }.left = NonNull::new(node),
-            Direction::Right => unsafe { parent.as_mut().unwrap() }.right = NonNull::new(node),
+            Direction::Left => parent.left = node.into(),
+            Direction::Right => parent.right = node.into(),
+            // SAFETY: If we ever get here, it means we abused the Direction
+            // API, the caller is responsible for it.
             _ => unreachable!(),
         };
     }
