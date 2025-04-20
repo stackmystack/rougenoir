@@ -243,6 +243,7 @@ where
 impl<K, V, C> Root<K, V, C> {
     pub fn first(&self) -> NodePtr<K, V> {
         let mut n = self.node?;
+        // SAFETY: by construction, n can never be null.
         while let Some(left) = unsafe { n.as_ref() }.left {
             n = left;
         }
@@ -264,14 +265,14 @@ impl<K, V, C> Root<K, V, C> {
     }
 
     pub fn replace_node(&mut self, mut victim: NonNull<Node<K, V>>, new: NonNull<Node<K, V>>) {
-        let new: NodePtr<K, V> = new.into();
-        let parent = unsafe { victim.as_ref() }.parent();
+        // SAFETY: by contract, victim and new are NonNull.
+        let victim = unsafe { victim.as_mut() };
+        let parent = victim.parent();
         {
-            let victim = unsafe { victim.as_mut() };
-            victim.left.set_parent(new.ptr());
-            victim.right.set_parent(new.ptr());
+            victim.left.set_parent(new.as_ptr());
+            victim.right.set_parent(new.as_ptr());
         }
-        self.change_child(victim.into(), new, parent);
+        self.change_child(victim.into(), new.into(), parent);
     }
 }
 
