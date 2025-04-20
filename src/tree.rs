@@ -64,10 +64,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                 let mut parent = current_node;
                 let mut direction = ComingFrom::Left; // We don't really care, but rust does.
                 while !current_node.is_null() {
-                    // [4] parent is never null by construction.
-                    parent = current_node;
+                    parent = current_node; // [4] parent is never null by construction.
                     #[allow(unused_variables)]
-                    let parent = parent;
+                    let parent = parent; // [4] by sealing, parent is never null hereafter.
 
                     // SAFETY: guaranteed not null by the while guard.
                     let current_ref = unsafe { current_node.as_mut().unwrap() };
@@ -88,6 +87,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                         }
                     };
                 }
+                #[allow(unused_variables)]
+                let parent = parent; // [4] by sealing, parent is never null hereafter.
 
                 // [3] link.
 
@@ -105,13 +106,13 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
 
     pub fn pop_first(&mut self) -> Option<(K, V)> {
         let node = self.root.first()?.as_ptr();
-        // SAFETY: guaranteed not null.
+        // SAFETY: by if guard, via op ?, node is not null.
         Some(unsafe { self.pop_node(node) })
     }
 
     pub fn pop_last(&mut self) -> Option<(K, V)> {
         let node = self.root.last()?.as_ptr();
-        // SAFETY: guaranteed not null.
+        // SAFETY: by if guard, via op ?, node is not null.
         Some(unsafe { self.pop_node(node) })
     }
 
@@ -129,7 +130,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
         Q: Ord + ?Sized,
     {
         let node = self.find_node(key)?.as_ptr();
-        // SAFETY: guaranteed not null.
+        // SAFETY: by if guard, via op ?, node is not null.
         Some(unsafe { self.pop_node(node) })
     }
 }
@@ -150,7 +151,7 @@ impl<K, V, C> Tree<K, V, C> {
     {
         let mut node = self.root.node;
         while let Some(candidate) = node {
-            // SAFETY: by construction, candidate is valid.
+            // SAFETY: by while guard, candidate is valid.
             let candidate = unsafe { candidate.as_ref() };
             match key.cmp(candidate.key.borrow()) {
                 Equal => break,
@@ -168,7 +169,7 @@ impl<K, V, C> Tree<K, V, C> {
 
     pub fn first_key_value(&self) -> Option<(&K, &V)> {
         self.root.first().map(|n| {
-            // SAFETY: by construction, n is valid.
+            // SAFETY: by if guard, via map, n is valid.
             let n = unsafe { n.as_ref() };
             (&n.key, &n.value)
         })
@@ -179,7 +180,7 @@ impl<K, V, C> Tree<K, V, C> {
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,
     {
-        // SAFETY: by construction, n is valid.
+        // SAFETY: by if guard, via map, n is valid.
         self.find_node(key).map(|n| &unsafe { n.as_ref() }.value)
     }
 
@@ -189,7 +190,7 @@ impl<K, V, C> Tree<K, V, C> {
         Q: Ord + ?Sized,
     {
         self.find_node(key).map(|n| {
-            // SAFETY: by construction, n is valid.
+            // SAFETY: by if guard, via map, n is valid.
             let n = unsafe { n.as_ref() };
             (&n.key, &n.value)
         })
@@ -200,13 +201,13 @@ impl<K, V, C> Tree<K, V, C> {
     }
 
     pub fn last(&self) -> Option<&V> {
-        // SAFETY: by construction, n is valid.
+        // SAFETY: by if guard, via map, n is valid.
         self.root.last().map(|n| &unsafe { n.as_ref() }.value)
     }
 
     pub fn last_key_value(&self) -> Option<(&K, &V)> {
         self.root.last().map(|n| {
-            // SAFETY: by construction, n is valid.
+            // SAFETY: by if guard, via map, n is valid.
             let n = unsafe { n.as_ref() };
             (&n.key, &n.value)
         })
