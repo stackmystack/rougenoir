@@ -5,10 +5,7 @@ use std::{
     ops::Index,
 };
 
-use crate::{
-    ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks, leak_alloc_node,
-    own_back,
-};
+use crate::{ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks};
 
 impl<K, V> Tree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -54,7 +51,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
         match self.root.node {
             None => {
                 // SAFETY: root doesn't exist, so we create a new one.
-                self.root.node = unsafe { leak_alloc_node(key, value) };
+                self.root.node = unsafe { Node::<K, V>::leak(key, value) };
                 self.len += 1;
                 None
             }
@@ -93,7 +90,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                 // [3] link.
 
                 // SAFETY: we're owning (k,v)
-                let mut node = unsafe { leak_alloc_node(key, value) };
+                let mut node = unsafe { Node::<K, V>::leak(key, value) };
                 // SAFETY: [4] parent is never null by construction.
                 unsafe { node.link(parent, direction) };
                 // SAFETY: node is definitely non null at this stage.
@@ -118,7 +115,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
 
     pub(crate) unsafe fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
         // SAFETY: pop_node delegates the safety to the caller; he needs to guarantee a non null ptr.
-        let node = unsafe { own_back(node) };
+        let node = unsafe { Node::<K, V>::unleak(node) };
         self.root.erase(node.as_ref().into());
         self.len -= 1;
         (node.key, node.value)

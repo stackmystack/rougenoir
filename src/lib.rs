@@ -1,4 +1,5 @@
 //! A red-black (rouge-noir) tree translated from the linux kernel's implementation of red-black trees.
+mod alloc;
 mod cached_tree;
 mod iter;
 mod node;
@@ -261,23 +262,23 @@ pub struct Set<T, C> {
     tree: Tree<T, (), C>,
 }
 
-/// # Safety
-///
-/// It leaks; use with dealloc_node.
-pub unsafe fn leak_alloc_node<K, V>(key: K, value: V) -> Option<NonNull<Node<K, V>>>
-where
-    K: Ord,
-{
-    let mut node = Node::new(key, value);
-    node.set_color(Color::Black);
-    NonNull::new(Box::into_raw(Box::new(node)))
-}
+impl<K, V> Node<K, V> {
+    /// # Safety
+    ///
+    /// It leaks; use with dealloc_node.
+    pub unsafe fn leak(key: K, value: V) -> Option<NonNull<Node<K, V>>>
+    where
+        K: Ord,
+    {
+        unsafe { alloc::leak_alloc_node(key, value) }
+    }
 
-/// # Safety
-///
-/// It drops; use after alloc_node.
-pub unsafe fn own_back<K, V>(current: *mut Node<K, V>) -> Box<Node<K, V>> {
-    unsafe { Box::from_raw(current) }
+    /// # Safety
+    ///
+    /// It drops; use after alloc_node.
+    pub unsafe fn unleak(current: *mut Node<K, V>) -> Box<Node<K, V>> {
+        unsafe { alloc::own_back(current) }
+    }
 }
 
 impl<K, V, C> Root<K, V, C> {
@@ -314,7 +315,7 @@ impl<K, V, C> Root<K, V, C> {
                 }
             }
             // SAFETY: Now it's safe to drop
-            unsafe { own_back(current.as_mut()) };
+            unsafe { Node::<K, V>::unleak(current.as_mut()) };
         }
     }
 }
