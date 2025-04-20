@@ -39,13 +39,13 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub fn left_deepest_node(&self) -> NodePtr<K, V> {
+    pub fn left_deepest_node(&self) -> NonNull<Node<K, V>> {
         let mut node = self;
         while let Some(next) = node.left.or(node.right) {
             // SAFETY: by construction.
             node = unsafe { next.as_ref() };
         }
-        Some(node.into())
+        self.into()
     }
 
     #[inline(always)]
@@ -190,16 +190,20 @@ impl<K, V> Node<K, V> {
     #[allow(dead_code)]
     #[inline(always)]
     pub fn next_postorder(&self) -> NodePtr<K, V> {
+        // SAFETY: by construction, parent in never None.
         let parent = unsafe { self.parent()?.as_ref() };
         if let (Some(left), Some(right)) = (parent.left, parent.right) {
-            /* If we're sitting on node, we've already seen our children */
-            if std::ptr::eq(self, unsafe { left.as_ref() }) {
-                /* If we are the parent's left node, go to the parent's right
-                 * node then all the way down to the left */
-                return unsafe { right.as_ref() }.left_deepest_node();
+            // If we're sitting on node, we've already seen our children
+            // SAFETY: by the if guard, both left and right are valid.
+            unsafe {
+                if std::ptr::eq(self, left.as_ref()) {
+                    // If we are the parent's left node, go to the parent's right
+                    // node then all the way down to the left
+                    return Some(right.as_ref().left_deepest_node());
+                }
             }
         }
-        Some(parent.into())
+        self.into()
     }
 }
 

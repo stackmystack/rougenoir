@@ -251,7 +251,8 @@ impl<K, V, C> Root<K, V, C> {
 
     pub fn first_postorder(&self) -> NodePtr<K, V> {
         let n = self.node?;
-        unsafe { n.as_ref() }.left_deepest_node()
+        // SAFETY: by construction, n is always valid.
+        Some(unsafe { n.as_ref() }.left_deepest_node())
     }
 
     pub fn last(&self) -> NodePtr<K, V> {
