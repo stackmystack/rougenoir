@@ -739,29 +739,40 @@ where
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
+        // [1] look for the first match: [2] bump self.next until [3] the key
+        // matches and finally [4] pop the node.
         let mut victim = self.next;
         while !victim.is_null() {
-            let (key, value, next) = {
+            // Call unsafe once to get the next node for the [2] bump, and the
+            // references for [3] key matching.
+            let (next, key, value) = {
                 // SAFETY: guaranteed not null by the while guard.
                 let victim_ref = unsafe { victim.as_ref() }.unwrap();
                 (
+                    victim_ref.next().map_or(ptr::null(), |n| n.as_ptr()),
                     &victim_ref.key,
                     &victim_ref.value,
-                    victim_ref.next().map_or(ptr::null(), |n| n.as_ptr()),
                 )
             };
 
+            // [2] bump self.next
             self.next = next;
             if (self.pred)(key, value) {
+                // [3] key matches. victim points to the correct location.
                 break;
             }
+            // ![3] key didn't match, it must be the next, right?
             victim = self.next;
         }
 
         if victim.is_null() {
+            // ![4] nothing found.
             None
         } else {
-            // SAFETY: guaranteed not null by the if guard.
+            // [4] pop the node.
+            // SAFETY: guaranteed not null by the if guard, which follows from
+            // the [1..3] construction, and nobody is mutating it after this
+            // point.
             Some(unsafe { self.tree.pop_node(victim.cast_mut()) })
         }
     }
