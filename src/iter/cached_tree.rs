@@ -793,6 +793,16 @@ mod test {
     }
 
     #[test]
+    fn extract_if() {
+        let mut map: CachedTree<i32, i32, Noop<i32, i32>> = (0..8).map(|x| (x, x)).collect();
+        let evens: CachedTree<i32, i32, Noop<i32, i32>> =
+            map.extract_if(|k, _v| k % 2 == 0).collect();
+        let odds = map;
+        assert_eq!(evens.keys().copied().collect::<Vec<_>>(), [0, 2, 4, 6]);
+        assert_eq!(odds.keys().copied().collect::<Vec<_>>(), [1, 3, 5, 7]);
+    }
+
+    #[test]
     fn for_loop() {
         let mut tree = CachedTree::new();
         let zero = "zero".to_string();
@@ -914,5 +924,13 @@ mod test {
         let res = res.unwrap();
         res.1.push_str(stomp);
         assert_eq!(&format!("{zero}{stomp}"), res.1);
+    }
+
+    #[test]
+    fn retain() {
+        let mut map: CachedTree<i32, i32, Noop<i32, i32>> = (0..8).map(|x| (x, x * 10)).collect();
+        // Keep only the elements with even-numbered keys.
+        map.retain(|&k, _| k % 2 == 0);
+        assert!(map.into_iter().eq(vec![(0, 0), (2, 20), (4, 40), (6, 60)]));
     }
 }

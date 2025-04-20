@@ -35,16 +35,16 @@ fmt-check:
 lint: clippy fmt-check typos
 
 miri:
-  cargo +nightly miri test
+  cargo +nightly miri nextest run
 
 release:
   @just build --release
 
 setup:
-  cargo install git-cliff typos-cli
+  cargo install cargo-nextest git-cliff typos-cli
 
 test *args:
-  cargo test {{args}}
+  cargo nextest run {{args}}
 
 typos:
   typos --sort
