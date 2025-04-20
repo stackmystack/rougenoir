@@ -44,7 +44,7 @@ setup:
   cargo install cargo-nextest git-cliff typos-cli
 
 test *args:
-  cargo nextest run {{args}}
+  cargo nextest run {{args}} --tests --examples
 
 typos:
   typos --sort
