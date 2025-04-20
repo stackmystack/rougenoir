@@ -187,14 +187,6 @@ impl<K, V> Node<K, V> {
         self.parent_color = self.parent().ptr().map_addr(|p| p + color as usize);
     }
 
-    // #[allow(dead_code)]
-    // #[inline(always)]
-    // pub fn clean(&mut self) {
-    //     self.parent_color = self as *mut _;
-    //     self.right = None;
-    //     self.left = None;
-    // }
-
     #[allow(dead_code)]
     #[inline(always)]
     pub fn next_postorder(&self) -> NodePtr<K, V> {
