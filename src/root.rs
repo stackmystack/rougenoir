@@ -574,7 +574,6 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
 
 impl<K, V, C> Root<K, V, C> {
     fn change_child(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, parent: NodePtr<K, V>) {
-        // TODO: is this exactly what happens in the kernel?
         if let Some(mut parent) = parent {
             let parent = unsafe { parent.as_mut() };
             if parent.left == old {
