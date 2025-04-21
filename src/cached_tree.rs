@@ -89,6 +89,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                     };
                 }
                 #[allow(unused_variables)]
+                let current_node = current_node;
+                let direction = direction;
                 let parent = parent; // [4] by sealing, parent is never null hereafter.
 
                 // [3] link.
@@ -119,6 +121,10 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
         Some(unsafe { self.pop_node(node) })
     }
 
+    /// # Safety
+    ///
+    /// 1. You need to provide a non-null *mut Node<K, V>.
+    /// 2. `node` will be dangling after this call.
     pub(crate) unsafe fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
         // SAFETY: pop_node delegates the safety to the caller; he needs to guarantee a non null ptr.
         let node = unsafe { Node::<K, V>::unleak(node) };

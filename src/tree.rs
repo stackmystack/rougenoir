@@ -85,6 +85,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                     };
                 }
                 #[allow(unused_variables)]
+                let current_node = current_node;
+                let direction = direction;
                 let parent = parent; // [4] by sealing, parent is never null hereafter.
 
                 // [3] link.
