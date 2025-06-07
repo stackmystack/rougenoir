@@ -25,6 +25,20 @@ impl<K, V, C> Tree<K, V, C> {
         Keys { inner: self.iter() }
     }
 
+    /// Gets an iterator over the entries of the map, in sorted order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut a = Tree::new();
+    /// a.insert(1, "a");
+    /// a.insert(2, "b");
+    ///
+    /// let iter = a.iter();
+    /// assert_eq!(iter.collect::<Vec<_>>(), [(&1, &"a"), (&2, &"b")]);
+    /// ```
     pub fn iter(&self) -> Iter<K, V> {
         Iter {
             first: self.root.first(),
@@ -35,6 +49,31 @@ impl<K, V, C> Tree<K, V, C> {
         }
     }
 
+    /// Gets a mutable iterator over the entries of the map, in sorted order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut a = Tree::new();
+    /// a.insert(1, "a");
+    /// a.insert(2, "b");
+    ///
+    /// let mut iter = a.iter_mut();
+    /// let (k, v) = iter.next().unwrap();
+    /// assert_eq!(*k, 1);
+    /// assert_eq!(*v, "a");
+    /// *v = "c";
+    ///
+    /// let (k, v) = iter.next().unwrap();
+    /// assert_eq!(*k, 2);
+    /// assert_eq!(*v, "b");
+    /// *v = "d";
+    ///
+    /// let values: Vec<&str> = a.values().cloned().collect();
+    /// assert_eq!(values, ["c", "d"]);
+    /// ```
     pub fn iter_mut(&mut self) -> IterMut<K, V> {
         IterMut {
             first: self.root.first(),

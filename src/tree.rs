@@ -32,6 +32,22 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
 }
 
 impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
+    /// Removes all key-value pairs from the tree, leaving it empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// tree.insert(1, "one");
+    /// tree.insert(2, "two");
+    /// assert_eq!(tree.len(), 2);
+    ///
+    /// tree.clear();
+    /// assert_eq!(tree.len(), 0);
+    /// assert!(tree.is_empty());
+    /// ```
     pub fn clear(&mut self) {
         drop(Tree {
             len: mem::replace(&mut self.len, 0),
@@ -44,6 +60,26 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
 }
 
 impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
+    /// Inserts a key-value pair into the tree.
+    ///
+    /// If the tree did not have this key present, `None` is returned.
+    ///
+    /// If the tree did have this key present, the value is updated, and the old
+    /// value is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// assert_eq!(tree.insert(37, "a"), None);
+    /// assert_eq!(tree.is_empty(), false);
+    ///
+    /// tree.insert(37, "b");
+    /// assert_eq!(tree.insert(37, "c"), Some("b"));
+    /// assert_eq!(tree[&37], "c");
+    /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
     where
         K: Ord,
@@ -103,18 +139,68 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
         }
     }
 
+    /// Removes and returns the element with the smallest key from the tree.
+    ///
+    /// # Returns
+    ///
+    /// `None` if the tree is empty, else `Some((key, value))`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// tree.insert(3, "three");
+    /// tree.insert(1, "one");
+    /// tree.insert(2, "two");
+    ///
+    /// assert_eq!(tree.pop_first(), Some((1, "one")));
+    /// assert_eq!(tree.pop_first(), Some((2, "two")));
+    /// assert_eq!(tree.pop_first(), Some((3, "three")));
+    /// assert_eq!(tree.pop_first(), None);
+    /// ```
     pub fn pop_first(&mut self) -> Option<(K, V)> {
         let node = self.root.first()?.as_ptr();
         // SAFETY: by if guard, via op ?, node is not null.
         Some(unsafe { self.pop_node(node) })
     }
 
+    /// Removes and returns the element with the largest key from the tree.
+    ///
+    /// # Returns
+    ///
+    /// `None` if the tree is empty, else `Some((key, value))`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// tree.insert(3, "three");
+    /// tree.insert(1, "one");
+    /// tree.insert(2, "two");
+    ///
+    /// assert_eq!(tree.pop_last(), Some((3, "three")));
+    /// assert_eq!(tree.pop_last(), Some((2, "two")));
+    /// assert_eq!(tree.pop_last(), Some((1, "one")));
+    /// assert_eq!(tree.pop_last(), None);
+    /// ```
     pub fn pop_last(&mut self) -> Option<(K, V)> {
         let node = self.root.last()?.as_ptr();
         // SAFETY: by if guard, via op ?, node is not null.
         Some(unsafe { self.pop_node(node) })
     }
 
+    /// Removes a node from the tree and returns its key-value pair.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `node` is a valid, non-null pointer to a node that
+    /// belongs to this tree.
+    ///
+    /// This is an internal method used by other removal operations.
     pub(crate) unsafe fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
         // SAFETY: pop_node delegates the safety to the caller; he needs to guarantee a non null ptr.
         let node = unsafe { Node::<K, V>::unleak(node) };
@@ -123,6 +209,25 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
         (node.key, node.value)
     }
 
+    /// Removes the entry with the given key from the tree and returns the stored
+    /// key-value pair.
+    ///
+    /// # Returns
+    ///
+    /// `Some((key, value))` if the key is in the tree, else `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// tree.insert(1, "a");
+    ///
+    /// assert_eq!(tree.remove(&1), Some((1, "a")));
+    /// assert_eq!(tree.remove(&1), None);
+    /// assert_eq!(tree.len(), 0);
+    /// ```
     pub fn remove<Q>(&mut self, key: &Q) -> Option<(K, V)>
     where
         K: Borrow<Q> + Ord,
@@ -135,6 +240,18 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
 }
 
 impl<K, V, C> Tree<K, V, C> {
+    /// Returns `true` if the key is in the tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// tree.insert(1, "a");
+    /// assert_eq!(tree.contains_key(&1), true);
+    /// assert_eq!(tree.contains_key(&2), false);
+    /// ```
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q> + Ord,
@@ -143,6 +260,11 @@ impl<K, V, C> Tree<K, V, C> {
         self.find_node(key).is_some()
     }
 
+    /// Returns a reference to a node containing the given key in the tree.
+    ///
+    /// # Returns
+    ///
+    /// `Some(node)` if the key is in the tree, else `None`.
     fn find_node<Q>(&self, key: &Q) -> NodePtr<K, V>
     where
         K: Borrow<Q> + Ord,
@@ -161,11 +283,51 @@ impl<K, V, C> Tree<K, V, C> {
         node
     }
 
+    /// Returns a reference to the value with the smallest key in the tree.
+    ///
+    /// # Returns
+    ///
+    /// `None` if the tree is empty, else `Some(&value)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// assert_eq!(tree.first(), None);
+    ///
+    /// tree.insert(3, "three");
+    /// tree.insert(2, "two");
+    /// tree.insert(1, "one");
+    ///
+    /// assert_eq!(tree.first(), Some(&"one"));
+    /// ```
     pub fn first(&self) -> Option<&V> {
         // SAFETY: by construction, n is valid.
         self.root.first().map(|e| &unsafe { e.as_ref() }.value)
     }
 
+    /// Returns the key-value pair with the smallest key in the tree.
+    ///
+    /// # Returns
+    ///
+    /// `None` if the tree is empty, else `Some((&key, &value))`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// assert_eq!(tree.first_key_value(), None);
+    ///
+    /// tree.insert(3, "three");
+    /// tree.insert(2, "two");
+    /// tree.insert(1, "one");
+    ///
+    /// assert_eq!(tree.first_key_value(), Some((&1, &"one")));
+    /// ```
     pub fn first_key_value(&self) -> Option<(&K, &V)> {
         self.root.first().map(|n| {
             // SAFETY: by if guard, via map, n is valid.
@@ -174,6 +336,22 @@ impl<K, V, C> Tree<K, V, C> {
         })
     }
 
+    /// Returns a reference to the value corresponding to the key.
+    ///
+    /// # Returns
+    ///
+    /// `Some(&value)` if the key is in the tree, else `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// tree.insert(1, "a");
+    /// assert_eq!(tree.get(&1), Some(&"a"));
+    /// assert_eq!(tree.get(&2), None);
+    /// ```
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q> + Ord,
@@ -183,6 +361,22 @@ impl<K, V, C> Tree<K, V, C> {
         self.find_node(key).map(|n| &unsafe { n.as_ref() }.value)
     }
 
+    /// Returns the key-value pair corresponding to the supplied key.
+    ///
+    /// # Returns
+    ///
+    /// `Some((&key, &value))` if the key is in the tree, else `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// tree.insert(1, "a");
+    /// assert_eq!(tree.get_key_value(&1), Some((&1, &"a")));
+    /// assert_eq!(tree.get_key_value(&2), None);
+    /// ```
     pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
     where
         K: Borrow<Q> + Ord,
@@ -195,15 +389,71 @@ impl<K, V, C> Tree<K, V, C> {
         })
     }
 
+    /// Returns `true` if the tree contains no elements.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// assert!(tree.is_empty());
+    ///
+    /// tree.insert(1, "one");
+    /// assert!(!tree.is_empty());
+    ///
+    /// tree.remove(&1);
+    /// assert!(tree.is_empty());
+    /// ```
     pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
 
+    /// Returns a reference to the value with the largest key in the tree.
+    ///
+    /// # Returns
+    ///
+    /// `None` if the tree is empty, else `Some(&value)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// assert_eq!(tree.last(), None);
+    ///
+    /// tree.insert(2, "two");
+    /// tree.insert(3, "three");
+    /// tree.insert(1, "one");
+    ///
+    /// assert_eq!(tree.last(), Some(&"three"));
+    /// ```
     pub fn last(&self) -> Option<&V> {
         // SAFETY: by if guard, via map, n is valid.
         self.root.last().map(|n| &unsafe { n.as_ref() }.value)
     }
 
+    /// Returns the key-value pair with the largest key in the tree.
+    ///
+    /// # Returns
+    ///
+    /// `None` if the tree is empty, else `Some((&key, &value))`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// assert_eq!(tree.last_key_value(), None);
+    ///
+    /// tree.insert(1, "one");
+    /// tree.insert(2, "two");
+    /// tree.insert(3, "three");
+    ///
+    /// assert_eq!(tree.last_key_value(), Some((&3, &"three")));
+    /// ```
     pub fn last_key_value(&self) -> Option<(&K, &V)> {
         self.root.last().map(|n| {
             // SAFETY: by if guard, via map, n is valid.
@@ -212,6 +462,25 @@ impl<K, V, C> Tree<K, V, C> {
         })
     }
 
+    /// Returns the number of elements in the tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rougenoir::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// assert_eq!(tree.len(), 0);
+    ///
+    /// tree.insert(1, "a");
+    /// assert_eq!(tree.len(), 1);
+    ///
+    /// tree.insert(2, "b");
+    /// assert_eq!(tree.len(), 2);
+    ///
+    /// tree.remove(&1);
+    /// assert_eq!(tree.len(), 1);
+    /// ```
     pub const fn len(&self) -> usize {
         self.len
     }
