@@ -283,6 +283,50 @@ impl<K, V, C> Tree<K, V, C> {
         node
     }
 
+    /// Finds the node and the direction from which it was reached.
+    /// 
+    /// # Returns
+    /// 
+    /// A tuple containing the node pointer and an optional `ComingFrom` enum indicating
+    /// the direction from which the node was reached.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use rougenoir::Tree;
+    /// let mut tree = Tree::new();
+    /// tree.insert(1, "one");
+    /// tree.insert(2, "two"); 
+    /// tree.insert(3, "three");
+    /// let (node, direction) = tree.find_node_and_branch(&2);
+    /// assert!(node.is_some());
+    /// assert_eq!(direction, Some(ComingFrom::Left));
+    /// ```
+    fn find_node_and_branch<Q>(&self, key: &Q) -> (NodePtr<K, V>, Option<ComingFrom>)
+    where
+        K: Borrow<Q> + Ord,
+        Q: Ord + ?Sized,
+    {
+        let mut direction = None;
+        let mut node = self.root.node;
+        while let Some(candidate) = node {
+            // SAFETY: by while guard, candidate is valid.
+            let candidate = unsafe { candidate.as_ref() };
+            match key.cmp(candidate.key.borrow()) {
+                Equal => break,
+                Greater => {
+                    direction = Some(ComingFrom::Right);
+                    node = candidate.right;
+                }
+                Less => {
+                    direction = Some(ComingFrom::Left);
+                    node = candidate.left;
+                }
+            }
+        }
+        (node, direction)
+    }
+
     /// Returns a reference to the value with the smallest key in the tree.
     ///
     /// # Returns
