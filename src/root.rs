@@ -17,7 +17,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
         }
     }
 
-    pub fn erase(&mut self, node: NonNull<Node<K, V>>) {
+    pub fn erase(&mut self, node: &mut Node<K, V>) {
         let rebalance = self.erase_augmented(node);
         if rebalance.is_some() {
             self.erase_color(rebalance);
@@ -92,7 +92,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                         tmp.set_parent_and_color(parent.ptr(), Color::Black);
                     }
                     parent.set_parent_and_color(node.ptr(), Color::Red);
-                    self.callbacks.rotate(parent, node);
+                    self.callbacks
+                        .rotate(unsafe { parent.mut_ref() }, unsafe { node.mut_ref() });
                     parent = node;
                     tmp = node.right();
                 }
@@ -111,7 +112,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp.set_parent_and_color(gparent.ptr(), Color::Black);
                 }
                 self.rotate_set_parents(gparent, parent, Color::Red);
-                self.callbacks.rotate(gparent, parent);
+                self.callbacks
+                    .rotate(unsafe { gparent.mut_ref() }, unsafe { parent.mut_ref() });
                 break;
             } else {
                 tmp = gparent.left();
@@ -135,7 +137,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                         tmp.set_parent_and_color(parent.ptr(), Color::Black);
                     }
                     parent.set_parent_and_color(node.ptr(), Color::Red);
-                    self.callbacks.rotate(parent, node);
+                    self.callbacks
+                        .rotate(unsafe { parent.mut_ref() }, unsafe { node.mut_ref() });
                     parent = node;
                     tmp = node.left();
                 }
@@ -147,7 +150,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp.set_parent_and_color(gparent.ptr(), Color::Black);
                 }
                 self.rotate_set_parents(gparent, parent, Color::Red);
-                self.callbacks.rotate(gparent, parent);
+                self.callbacks
+                    .rotate(unsafe { gparent.mut_ref() }, unsafe { parent.mut_ref() });
                 break;
             }
         }
@@ -267,8 +271,7 @@ impl<K, V, C> Root<K, V, C> {
 
 impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
     #[inline]
-    fn erase_augmented(&mut self, node: NonNull<Node<K, V>>) -> NodePtr<K, V> {
-        let node = unsafe { node.as_ref() };
+    fn erase_augmented(&mut self, node: &mut Node<K, V>) -> NodePtr<K, V> {
         let mut child = node.right;
         let mut tmp = node.left;
         let mut parent;
@@ -316,7 +319,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 //        (c)
                 parent = successor;
                 child2 = successor.right();
-                self.callbacks.copy(node.into(), successor);
+                self.callbacks.copy(node, unsafe { successor.mut_ref() });
             } else {
                 // Case 3: node's successor is leftmost under
                 // node's right child subtree
@@ -343,8 +346,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                 successor.set_right(child);
                 child.set_parent(successor.ptr());
 
-                self.callbacks.copy(node.into(), successor);
-                self.callbacks.propagate(parent, successor);
+                self.callbacks.copy(node, unsafe { successor.mut_ref() });
+                self.callbacks
+                    .propagate(parent.maybe_mut_ref(), successor.maybe_mut_ref());
             }
 
             tmp = node.left;
@@ -366,7 +370,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
             tmp = successor;
         }
 
-        self.callbacks.propagate(tmp, None);
+        self.callbacks.propagate(tmp.maybe_mut_ref(), None);
         rebalance
     }
 
@@ -400,7 +404,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     sibling.set_left(parent);
                     tmp1.set_parent_and_color(parent.ptr(), Color::Black);
                     self.rotate_set_parents(parent, sibling, Color::Red);
-                    self.callbacks.rotate(parent, sibling);
+                    self.callbacks
+                        .rotate(unsafe { parent.mut_ref() }, unsafe { sibling.mut_ref() });
                     sibling = tmp1;
                 }
                 tmp1 = sibling.right();
@@ -462,7 +467,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     if tmp1.is_some() {
                         tmp1.set_parent_and_color(sibling.ptr(), Color::Black);
                     }
-                    self.callbacks.rotate(sibling, tmp2);
+                    self.callbacks
+                        .rotate(unsafe { sibling.mut_ref() }, unsafe { tmp2.mut_ref() });
                     tmp1 = sibling;
                     sibling = tmp2;
                 }
@@ -483,7 +489,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp2.set_parent(parent.ptr());
                 }
                 self.rotate_set_parents(parent, sibling, Color::Black);
-                self.callbacks.rotate(parent, sibling);
+                self.callbacks
+                    .rotate(unsafe { parent.mut_ref() }, unsafe { sibling.mut_ref() });
                 break;
             } else {
                 sibling = parent.left();
@@ -494,7 +501,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     sibling.set_right(parent);
                     tmp1.set_parent_and_color(parent.ptr(), Color::Black);
                     self.rotate_set_parents(parent, sibling, Color::Red);
-                    self.callbacks.rotate(parent, sibling);
+                    self.callbacks
+                        .rotate(unsafe { parent.mut_ref() }, unsafe { sibling.mut_ref() });
                     sibling = tmp1;
                 }
                 tmp1 = sibling.left();
@@ -522,7 +530,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     if tmp1.is_some() {
                         tmp1.set_parent_and_color(sibling.ptr(), Color::Black);
                     }
-                    self.callbacks.rotate(sibling, tmp2);
+                    self.callbacks
+                        .rotate(unsafe { sibling.mut_ref() }, unsafe { tmp2.mut_ref() });
                     tmp1 = sibling;
                     sibling = tmp2;
                 }
@@ -535,7 +544,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
                     tmp2.set_parent(parent.ptr());
                 }
                 self.rotate_set_parents(parent, sibling, Color::Black);
-                self.callbacks.rotate(parent, sibling);
+                self.callbacks
+                    .rotate(unsafe { parent.mut_ref() }, unsafe { sibling.mut_ref() });
                 break;
             }
         }

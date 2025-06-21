@@ -203,8 +203,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     /// This is an internal method used by other removal operations.
     pub(crate) unsafe fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
         // SAFETY: pop_node delegates the safety to the caller; he needs to guarantee a non null ptr.
-        let node = unsafe { Node::<K, V>::unleak(node) };
-        self.root.erase(node.as_ref().into());
+        let mut node = unsafe { Node::<K, V>::unleak(node) };
+        self.root.erase(node.as_mut());
         self.len -= 1;
         (node.key, node.value)
     }

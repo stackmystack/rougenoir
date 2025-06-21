@@ -127,9 +127,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     /// 2. `node` will be dangling after this call.
     pub(crate) unsafe fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
         // SAFETY: pop_node delegates the safety to the caller; he needs to guarantee a non null ptr.
-        let node = unsafe { Node::<K, V>::unleak(node) };
-        let victim = node.as_ref();
-        self.root.erase(victim.into());
+        let mut node = unsafe { Node::<K, V>::unleak(node) };
+        let victim = node.as_mut();
+        self.root.erase(victim);
         self.len -= 1;
         if self.leftmost == victim.into() {
             self.leftmost = victim.next();

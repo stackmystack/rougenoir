@@ -6,7 +6,6 @@
 
 ## All
 
-1. !!!!!! Documentation !!!!!
 1. append
 1. replace
 1. take
