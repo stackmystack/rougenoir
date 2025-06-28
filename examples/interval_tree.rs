@@ -1,6 +1,6 @@
 // From the Linux Kernel's core API docs:
 // https://github.com/torvalds/linux/blob/master/Documentation/core-api/rbtree.rst
-use std::{cmp::Ordering::*, marker::PhantomData, ptr::NonNull};
+use std::{cmp::Ordering::*, marker::PhantomData};
 
 use rougenoir::{ComingFrom, Node, NodePtrExt, Root, TreeCallbacks};
 
@@ -29,7 +29,7 @@ where
     T: Ord + PartialOrd,
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.from.partial_cmp(&other.from)
+        Some(self.cmp(other))
     }
 }
 
@@ -51,9 +51,7 @@ impl<K, V> IntervalTreeCallbacks<K, V>
 where
     K: Ord + Copy,
 {
-    fn compute_rubtree_last(node: NonNull<Node<Interval<K>, V>>) -> K {
-        // SAFETY: by definition, node is NonNull.
-        let node = unsafe { node.as_ref() };
+    fn compute_rubtree_last(node: &Node<Interval<K>, V>) -> K {
         let mut max = node.key.to;
         let mut subtree_to;
         if node.left.is_some() {
@@ -96,8 +94,7 @@ where
                 let current_ref = unsafe { &*current };
                 let current_mut = unsafe { &mut *current };
 
-                let node_ptr = NonNull::new(current).unwrap();
-                let subtree_to = IntervalTreeCallbacks::compute_rubtree_last(node_ptr);
+                let subtree_to = IntervalTreeCallbacks::compute_rubtree_last(current_ref);
 
                 if current_ref.key.subtree_to == subtree_to {
                     break;
@@ -122,8 +119,7 @@ where
         new: &mut Node<Self::Key, Self::Value>,
     ) {
         new.key.subtree_to = old.key.subtree_to;
-        let old_ptr = NonNull::new(old as *mut _).unwrap();
-        old.key.subtree_to = IntervalTreeCallbacks::compute_rubtree_last(old_ptr);
+        old.key.subtree_to = IntervalTreeCallbacks::compute_rubtree_last(old);
     }
 }
 
