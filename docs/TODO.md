@@ -1,8 +1,6 @@
 # TODO
 
 1. Example: interval tree in integration test
-1. README.md
-1. docs
 
 ## All
 
