@@ -2,8 +2,20 @@
 
 1. Be nice.
 1. Please contact me before:
-  1. you start a big re-write, or
-  1. you want to tackle something from [TODO.md](TODO.md).
+  - you start a big re-write, or
+  - you want to tackle something from [TODO.md](TODO.md).
+1. Please pay attention to the commit message format because the changelog is automatically generated:
+  - **Don't use** [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
+  - The format is close enough:
+    ```
+    <type>: [optional scope]: <description>
+
+    [optional body]
+    ```
+  - `fix: tree: change rotation API` instead of `fix(tree): change rotation API`.
+  - Examples and descriptions are highly encouraged in the commit body.
+  - See [`cliff.toml`](../cliff.toml)
+
 
 ## Dependencies
 

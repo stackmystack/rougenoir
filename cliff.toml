@@ -34,10 +34,11 @@ body = """
     {% endfor -%}
 {% endfor %}
 {%- if github -%}
-{% if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
+{% set filtered_contributors = github.contributors | filter(attribute="is_first_time", value=true) | filter(attribute="username", value_not="dependabot") | filter(attribute="username", value_not=remote.github.owner) %}
+{% if filtered_contributors | length != 0 %}
   ## New Contributors ❤️
 {% endif %}\
-{% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
+{% for contributor in filtered_contributors %}
   * @{{ contributor.username }} made their first contribution
     {%- if contributor.pr_number %} in \
       [#{{ contributor.pr_number }}]({{ self::remote_url() }}/pull/{{ contributor.pr_number }}) \
@@ -67,24 +68,30 @@ trim = true
 
 [git]
 # parse the commits based on https://www.conventionalcommits.org
-conventional_commits = true
+conventional_commits = false
 # filter out the commits that are not conventional
 filter_unconventional = false
 # process each line of a commit as an individual commit
 split_commits = false
+# turn my message format to a conventional message format
+commit_preprocessors = [
+  # Replace your custom format with conventional format for processing
+  { pattern = '\A(\w+): (([^:]+):)+ (.+)\z', replace = '${1}(${2}): ${3}' },
+]
 # regex for parsing and grouping commits
 commit_parsers = [
-    { message = "!:", group = "<!-- 0 -->Breaking" },
-    { message = "^feat", group = "<!-- 1 -->Features" },
-    { message = "^fix", group = "<!-- 2 -->Bug Fixes" },
-    { message = "^perf", group = "<!-- 3 -->Performance" },
-    { message = "^doc", group = "<!-- 4 -->Documentation" },
-    { message = "^bench", skip = true },
-    { message = "^refactor", skip = true },
-    { message = "^test", skip = true },
-    { message = "^style", skip = true },
-    { message = "^chore", skip = true },
-    { message = ".*", group = "<!-- 5 -->Other" },
+  { message = "!:", group = "<!-- 0 -->Breaking" },
+  { message = "^feat", group = "<!-- 1 -->Features" },
+  { message = "^fix", group = "<!-- 2 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 3 -->Performance" },
+  { message = "^doc", group = "<!-- 4 -->Documentation" },
+  { message = "^bench", skip = true },
+  { message = "^re", skip = true },
+  { message = "^refactor", skip = true },
+  { message = "^test", skip = true },
+  { message = "^style", skip = true },
+  { message = "^chore", skip = true },
+  { message = ".*", skip = true },
 ]
 # filter out the commits that are not matched by commit parsers
 filter_commits = true
@@ -95,4 +102,4 @@ sort_commits = "oldest"
 
 [remote.github]
 owner = "stackmystack"
-repo = "tsdl"
+repo = "rougenoir"
