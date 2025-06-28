@@ -20,7 +20,9 @@ where
     T: Ord,
 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.from.cmp(&other.from)
+        self.from
+            .cmp(&other.from)
+            .then_with(|| self.to.cmp(&other.to))
     }
 }
 
@@ -258,11 +260,111 @@ mod test {
     use crate::IntervalTree;
 
     #[test]
-    fn insert() {
+    fn insert_single_interval() {
         let mut tree = IntervalTree::new();
-        tree.insert((0, 1), 12);
-        tree.insert((0, 1), 12);
-        tree.insert((0, 2), 12);
-        tree.insert((0, 3), 12);
+        let result = tree.insert((0, 5), "first");
+        assert_eq!(result, None);
+        assert_eq!(tree.len, 1);
+    }
+
+    #[test]
+    fn insert_duplicate_interval_replaces_value() {
+        let mut tree = IntervalTree::new();
+        tree.insert((0, 5), "first");
+        let result = tree.insert((0, 5), "second");
+        assert_eq!(result, Some("first"));
+        assert_eq!(tree.len, 1);
+    }
+
+    #[test]
+    fn insert_multiple_non_overlapping_intervals() {
+        let mut tree = IntervalTree::new();
+        tree.insert((0, 5), "a");
+        tree.insert((10, 15), "b");
+        tree.insert((20, 25), "c");
+        assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn insert_overlapping_intervals() {
+        let mut tree = IntervalTree::new();
+        tree.insert((0, 10), "a");
+        tree.insert((5, 15), "b");
+        tree.insert((12, 20), "c");
+        assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn insert_nested_intervals() {
+        let mut tree = IntervalTree::new();
+        tree.insert((0, 20), "outer");
+        tree.insert((5, 10), "inner1");
+        tree.insert((12, 15), "inner2");
+        assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn insert_maintains_ordering() {
+        let mut tree = IntervalTree::new();
+        // Insert in non-sorted order
+        tree.insert((10, 15), "b");
+        tree.insert((0, 5), "a");
+        tree.insert((20, 25), "c");
+        tree.insert((5, 10), "d");
+        assert_eq!(tree.len, 4);
+    }
+
+    #[test]
+    fn insert_identical_start_different_end() {
+        let mut tree = IntervalTree::new();
+        tree.insert((0, 5), "short");
+        tree.insert((0, 10), "medium");
+        tree.insert((0, 15), "long");
+        assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn insert_point_intervals() {
+        let mut tree = IntervalTree::new();
+        tree.insert((5, 5), "point1");
+        tree.insert((10, 10), "point2");
+        tree.insert((15, 15), "point3");
+        assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn insert_updates_subtree_max() {
+        let mut tree = IntervalTree::new();
+        tree.insert((0, 5), "a");
+        tree.insert((10, 20), "b");
+        tree.insert((2, 15), "c"); // This should update subtree_to values
+        assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn insert_large_range_intervals() {
+        let mut tree = IntervalTree::new();
+        tree.insert((0, 1000), "big");
+        tree.insert((500, 1500), "bigger");
+        tree.insert((100, 200), "small");
+        assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn insert_negative_intervals() {
+        let mut tree = IntervalTree::new();
+        tree.insert((-10, -5), "neg1");
+        tree.insert((-20, -15), "neg2");
+        tree.insert((-5, 5), "crossing");
+        assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn insert_many_intervals() {
+        let mut tree = IntervalTree::new();
+        for i in 0..100 {
+            tree.insert((i * 2, i * 2 + 1), format!("interval_{}", i));
+        }
+        assert_eq!(tree.len, 100);
     }
 }
