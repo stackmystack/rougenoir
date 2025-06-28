@@ -47,10 +47,16 @@ pub trait NodePtrExt {
 
     fn maybe_ref(&self) -> Option<&Node<Self::Key, Self::Value>>;
     fn maybe_mut_ref(&mut self) -> Option<&mut Node<Self::Key, Self::Value>>;
-    unsafe fn mut_ref(&self) -> &mut Node<Self::Key, Self::Value>;
+    /// # Safety
+    ///
+    /// This is an internal API. Don't use directly, and most importantly, don't drop manually.
+    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value>;
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
     fn left(&self) -> NodePtr<Self::Key, Self::Value>;
+    /// # Safety
+    ///
+    /// This should not be called on null ptrs.
     unsafe fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: ComingFrom);
     #[allow(dead_code)]
     fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
@@ -83,7 +89,7 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
-    unsafe fn mut_ref(&self) -> &mut Node<Self::Key, Self::Value> {
+    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value> {
         self.map(|mut v| unsafe { v.as_mut() }).unwrap()
     }
 

@@ -48,6 +48,9 @@ impl<K, V> Node<K, V> {
         self.into()
     }
 
+    /// # Safety
+    ///
+    /// This should not be called on null ptrs.
     #[inline(always)]
     pub unsafe fn link(node: *mut Self, parent: *mut Node<K, V>, direction: ComingFrom) {
         // SAFETY: link delegates the safety of this call to the caller.
