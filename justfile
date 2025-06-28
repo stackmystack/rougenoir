@@ -35,7 +35,7 @@ fmt-check:
 lint: clippy fmt-check typos
 
 miri *args:
-  cargo +nightly miri nextest run {{args}}
+  cargo +nightly miri nextest run {{args}} --tests --examples
 
 release:
   @just build --release
