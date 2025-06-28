@@ -55,7 +55,7 @@ impl<K, V> Node<K, V> {
     pub unsafe fn link(node: *mut Self, parent: *mut Node<K, V>, direction: ComingFrom) {
         // SAFETY: link delegates the safety of this call to the caller.
         // SAFETY: node is guaranteed not null by the caller, but we still can't
-        // [1] get a &mut to parent untill we finish from [2] assigning
+        // [1] get a &mut to parent until we finish from [2] assigning
         // parent_color. Thanks miri.
         let node = unsafe { node.as_mut().unwrap() };
         node.parent_color = parent; // [2] assigning parent_color
@@ -152,7 +152,7 @@ impl<K, V> Node<K, V> {
         loop {
             parent = node_ref.parent();
             if parent.is_none() {
-                break; // [5] when parent is noe, we just [6] return.
+                break; // [5] when parent is none, we just [6] return.
             }
 
             if parent // [3] first time it's a left-hand child of its parent.

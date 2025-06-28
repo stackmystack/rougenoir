@@ -21,7 +21,7 @@ impl<K, V, C> CachedTree<K, V, C> {
         Keys { inner: self.iter() }
     }
 
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             first: self.root.first(),
             last: self.root.last(),
@@ -31,7 +31,7 @@ impl<K, V, C> CachedTree<K, V, C> {
         }
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut {
             first: self.root.first(),
             last: self.root.first(),

@@ -284,24 +284,25 @@ impl<K, V, C> Tree<K, V, C> {
     }
 
     /// Finds the node and the direction from which it was reached.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// A tuple containing the node pointer and an optional `ComingFrom` enum indicating
     /// the direction from which the node was reached.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use rougenoir::Tree;
     /// let mut tree = Tree::new();
     /// tree.insert(1, "one");
-    /// tree.insert(2, "two"); 
+    /// tree.insert(2, "two");
     /// tree.insert(3, "three");
     /// let (node, direction) = tree.find_node_and_branch(&2);
     /// assert!(node.is_some());
     /// assert_eq!(direction, Some(ComingFrom::Left));
     /// ```
+    #[allow(dead_code)]
     fn find_node_and_branch<Q>(&self, key: &Q) -> (NodePtr<K, V>, Option<ComingFrom>)
     where
         K: Borrow<Q> + Ord,

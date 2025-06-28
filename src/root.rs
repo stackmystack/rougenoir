@@ -169,7 +169,7 @@ where
         let mut res = true;
         while let Some(c) = current {
             if c.as_ptr().is_null() {
-                println!("Node {:?} is null", c);
+                println!("Node {c:?} is null");
                 res = false;
                 break;
             }
