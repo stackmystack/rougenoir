@@ -90,7 +90,7 @@ where
             let mut current: *mut Node<Self::Key, Self::Value> = start_node;
             let stop_ptr = stop.map_or(std::ptr::null(), |s| s as *const _);
 
-            while current != stop_ptr as *mut _ {
+            while !std::ptr::eq(current, stop_ptr) {
                 let current_ref = unsafe { &*current };
                 let current_mut = unsafe { &mut *current };
 
