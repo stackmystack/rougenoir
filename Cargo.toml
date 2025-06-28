@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.6"
 pretty_assertions = "1"
 quickcheck = "1"
 quickcheck_macros = "1"

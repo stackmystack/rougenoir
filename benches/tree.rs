@@ -1,8 +1,9 @@
 extern crate rougenoir;
 
+use std::hint::black_box;
 use std::{collections::BTreeMap, ops::Range};
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rougenoir::Noop;
 
 fn insert_btree(range: Range<usize>, tree: &mut BTreeMap<usize, ()>) {
