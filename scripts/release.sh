@@ -11,6 +11,8 @@ just test
 # update the version
 msg="# managed by release.sh"
 sed -E -i "s/^version = .*\s+$msg$/version = \"${version#v}\" $msg/" Cargo.toml
+# update version in README.md usage section
+sed -E -i "s/^rougenoir = \"[0-9]+\.[0-9]+\.[0-9]+\"/rougenoir = \"${version#v}\"/" README.md
 # update the changelog
 git cliff --unreleased --tag "$version" --prepend CHANGELOG.md
 git add -A && git commit -m "chore(release): $version"
@@ -28,4 +30,3 @@ changelog=$(git cliff --unreleased --strip all)
 git tag -a "$version" -m "Release $version" -m "$changelog"
 echo "Done!"
 echo "Now push the commit (git push origin master) and the tag (git push origin refs/tags/$version)."
-
