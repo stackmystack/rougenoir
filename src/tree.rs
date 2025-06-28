@@ -293,17 +293,32 @@ impl<K, V, C> Tree<K, V, C> {
     /// # Examples
     ///
     /// ```
-    /// use rougenoir::Tree;
+    /// use rougenoir::{ComingFrom::{Left, Right}, Tree};
+    ///
     /// let mut tree = Tree::new();
     /// tree.insert(1, "one");
     /// tree.insert(2, "two");
     /// tree.insert(3, "three");
+    ///
     /// let (node, direction) = tree.find_node_and_branch(&2);
+    ///
     /// assert!(node.is_some());
-    /// assert_eq!(direction, Some(ComingFrom::Left));
+    /// assert_eq!(direction, None);
+    ///
+    /// let (node, direction) = tree.find_node_and_branch(&1);
+    /// assert!(node.is_some());
+    /// assert_eq!(direction, Some(Left));
+    ///
+    /// let (node, direction) = tree.find_node_and_branch(&3);
+    /// assert!(node.is_some());
+    /// assert_eq!(direction, Some(Right));
+    ///
+    /// let (node, direction) = tree.find_node_and_branch(&42);
+    /// assert!(node.is_none());
+    /// assert_eq!(direction, Some(Right));
     /// ```
     #[allow(dead_code)]
-    fn find_node_and_branch<Q>(&self, key: &Q) -> (NodePtr<K, V>, Option<ComingFrom>)
+    pub fn find_node_and_branch<Q>(&self, key: &Q) -> (NodePtr<K, V>, Option<ComingFrom>)
     where
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,

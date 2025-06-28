@@ -36,6 +36,7 @@ lint: clippy fmt-check typos
 
 miri *args:
   cargo +nightly miri nextest run {{args}} --tests --examples
+  cargo +nightly miri test --doc
 
 release:
   @just build --release
@@ -45,6 +46,7 @@ setup:
 
 test *args:
   cargo nextest run {{args}} --tests --examples
+  cargo test --doc
 
 typos:
   typos --sort

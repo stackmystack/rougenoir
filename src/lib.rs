@@ -33,7 +33,7 @@ impl From<usize> for Color {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ComingFrom {
     Left,
     Right,
