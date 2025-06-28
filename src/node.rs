@@ -48,6 +48,9 @@ impl<K, V> Node<K, V> {
         self.into()
     }
 
+    /// # Safety
+    ///
+    /// This should not be called on null ptrs.
     #[inline(always)]
     pub unsafe fn link(node: *mut Self, parent: *mut Node<K, V>, direction: ComingFrom) {
         // SAFETY: link delegates the safety of this call to the caller.
@@ -96,7 +99,7 @@ impl<K, V> Node<K, V> {
 
             if parent // [3] first time it's a left-hand child of its parent.
                 .right()
-                .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
+                .map(|p| !std::ptr::eq(node_ref, p.as_ptr()))
                 .unwrap_or(true)
             {
                 break; // [4] said parent is our 'next' node.
@@ -154,7 +157,7 @@ impl<K, V> Node<K, V> {
 
             if parent // [3] first time it's a left-hand child of its parent.
                 .left()
-                .map(|p| node_ref as *const Node<K, V> != p.as_ptr())
+                .map(|p| !std::ptr::eq(node_ref, p.as_ptr()))
                 .unwrap_or(true)
             {
                 break; // [4] said parent is our 'next' node, [6] return.

@@ -45,9 +45,18 @@ pub trait NodePtrExt {
     type Key;
     type Value;
 
+    fn maybe_ref(&self) -> Option<&Node<Self::Key, Self::Value>>;
+    fn maybe_mut_ref(&mut self) -> Option<&mut Node<Self::Key, Self::Value>>;
+    /// # Safety
+    ///
+    /// This is an internal API. Don't use directly, and most importantly, don't drop manually.
+    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value>;
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
     fn left(&self) -> NodePtr<Self::Key, Self::Value>;
+    /// # Safety
+    ///
+    /// This should not be called on null ptrs.
     unsafe fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: ComingFrom);
     #[allow(dead_code)]
     fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
@@ -68,6 +77,21 @@ pub trait NodePtrExt {
 impl<K, V> NodePtrExt for NodePtr<K, V> {
     type Key = K;
     type Value = V;
+
+    #[inline(always)]
+    fn maybe_ref(&self) -> Option<&Node<Self::Key, Self::Value>> {
+        self.map(|n| unsafe { n.as_ref() })
+    }
+
+    #[inline(always)]
+    fn maybe_mut_ref(&mut self) -> Option<&mut Node<Self::Key, Self::Value>> {
+        self.map(|mut n| unsafe { n.as_mut() })
+    }
+
+    #[inline(always)]
+    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value> {
+        self.map(|mut v| unsafe { v.as_mut() }).unwrap()
+    }
 
     #[inline(always)]
     fn is_black(&self) -> bool {
@@ -195,11 +219,15 @@ pub trait TreeCallbacks {
 
     fn propagate(
         &self,
-        node: NodePtr<Self::Key, Self::Value>,
-        stop: NodePtr<Self::Key, Self::Value>,
+        node: Option<&mut Node<Self::Key, Self::Value>>,
+        stop: Option<&mut Node<Self::Key, Self::Value>>,
     );
-    fn copy(&self, old: NodePtr<Self::Key, Self::Value>, new: NodePtr<Self::Key, Self::Value>);
-    fn rotate(&self, old: NodePtr<Self::Key, Self::Value>, new: NodePtr<Self::Key, Self::Value>);
+    fn copy(&self, old: &mut Node<Self::Key, Self::Value>, new: &mut Node<Self::Key, Self::Value>);
+    fn rotate(
+        &self,
+        old: &mut Node<Self::Key, Self::Value>,
+        new: &mut Node<Self::Key, Self::Value>,
+    );
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
@@ -229,12 +257,21 @@ impl<K, V> TreeCallbacks for Noop<K, V> {
 
     fn propagate(
         &self,
-        _node: NodePtr<Self::Key, Self::Value>,
-        _stop: NodePtr<Self::Key, Self::Value>,
+        _node: Option<&mut Node<Self::Key, Self::Value>>,
+        _stop: Option<&mut Node<Self::Key, Self::Value>>,
     ) {
     }
-    fn copy(&self, _old: NodePtr<Self::Key, Self::Value>, _new: NodePtr<Self::Key, Self::Value>) {}
-    fn rotate(&self, _old: NodePtr<Self::Key, Self::Value>, _new: NodePtr<Self::Key, Self::Value>) {
+    fn copy(
+        &self,
+        _old: &mut Node<Self::Key, Self::Value>,
+        _new: &mut Node<Self::Key, Self::Value>,
+    ) {
+    }
+    fn rotate(
+        &self,
+        _old: &mut Node<Self::Key, Self::Value>,
+        _new: &mut Node<Self::Key, Self::Value>,
+    ) {
     }
 }
 

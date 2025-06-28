@@ -1,6 +1,6 @@
 // From the Linux Kernel's core API docs:
 // https://github.com/torvalds/linux/blob/master/Documentation/core-api/rbtree.rst
-use std::{cmp::Ordering::*, marker::PhantomData, ptr::NonNull};
+use std::{cmp::Ordering::*, marker::PhantomData};
 
 use rougenoir::{ComingFrom, Node, NodePtrExt, Root, TreeCallbacks};
 
@@ -29,7 +29,7 @@ where
     T: Ord + PartialOrd,
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.from.partial_cmp(&other.from)
+        Some(self.cmp(other))
     }
 }
 
@@ -51,9 +51,7 @@ impl<K, V> IntervalTreeCallbacks<K, V>
 where
     K: Ord + Copy,
 {
-    fn compute_rubtree_last(node: NonNull<Node<Interval<K>, V>>) -> K {
-        // SAFETY: by definition, node is NonNull.
-        let node = unsafe { node.as_ref() };
+    fn compute_rubtree_last(node: &Node<Interval<K>, V>) -> K {
         let mut max = node.key.to;
         let mut subtree_to;
         if node.left.is_some() {
@@ -79,53 +77,49 @@ where
     type Key = Interval<K>;
     type Value = V;
 
-    fn copy(
-        &self,
-        old: rougenoir::NodePtr<Self::Key, Self::Value>,
-        new: rougenoir::NodePtr<Self::Key, Self::Value>,
-    ) {
-        new.zip(old).map(|(mut n, o)| {
-            // SAFETY: by if guard, via map.
-            let nk = &mut unsafe { n.as_mut() }.key;
-            let ok = &unsafe { o.as_ref() }.key;
-            nk.subtree_to = ok.subtree_to;
-        });
+    fn copy(&self, old: &mut Node<Self::Key, Self::Value>, new: &mut Node<Self::Key, Self::Value>) {
+        new.key.subtree_to = old.key.subtree_to;
     }
 
     fn propagate(
         &self,
-        node: rougenoir::NodePtr<Self::Key, Self::Value>,
-        stop: rougenoir::NodePtr<Self::Key, Self::Value>,
+        node: Option<&mut Node<Self::Key, Self::Value>>,
+        stop: Option<&mut Node<Self::Key, Self::Value>>,
     ) {
-        // node is guaranteed non-null.
-        let mut current = node.ptr();
-        while current != stop.ptr() {
-            let subtree_to = IntervalTreeCallbacks::compute_rubtree_last(node.unwrap());
+        if let Some(start_node) = node {
+            let mut current: *mut Node<Self::Key, Self::Value> = start_node;
+            let stop_ptr = stop.map_or(std::ptr::null(), |s| s as *const _);
 
-            if !current.is_null() {
-                if unsafe { current.as_ref() }.unwrap().key.subtree_to == subtree_to {
+            while !std::ptr::eq(current, stop_ptr) {
+                let current_ref = unsafe { &*current };
+                let current_mut = unsafe { &mut *current };
+
+                let subtree_to = IntervalTreeCallbacks::compute_rubtree_last(current_ref);
+
+                if current_ref.key.subtree_to == subtree_to {
                     break;
                 }
 
-                unsafe { current.as_mut() }.unwrap().key.subtree_to = subtree_to;
-            }
+                current_mut.key.subtree_to = subtree_to;
 
-            current = node.parent().ptr();
+                // Move to parent
+                let parent_opt = current_ref.parent();
+                if let Some(parent_ptr) = parent_opt {
+                    current = parent_ptr.as_ptr();
+                } else {
+                    break;
+                }
+            }
         }
     }
 
     fn rotate(
         &self,
-        old: rougenoir::NodePtr<Self::Key, Self::Value>,
-        new: rougenoir::NodePtr<Self::Key, Self::Value>,
+        old: &mut Node<Self::Key, Self::Value>,
+        new: &mut Node<Self::Key, Self::Value>,
     ) {
-        new.zip(old).map(|(mut n, mut o)| {
-            // SAFETY: by if guard, via map.
-            let nk = &mut unsafe { n.as_mut() }.key;
-            let ok = &mut unsafe { o.as_mut() }.key;
-            nk.subtree_to = ok.subtree_to;
-            ok.subtree_to = IntervalTreeCallbacks::compute_rubtree_last(o);
-        });
+        new.key.subtree_to = old.key.subtree_to;
+        old.key.subtree_to = IntervalTreeCallbacks::compute_rubtree_last(old);
     }
 }
 
