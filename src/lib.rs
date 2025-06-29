@@ -232,8 +232,7 @@ pub trait TreeCallbacks {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Noop<K, V> {
-    _phantom_k: PhantomData<K>,
-    _phantom_v: PhantomData<V>,
+    phantom: PhantomData<(K, V)>,
 }
 
 impl<K, V> Default for Noop<K, V> {
@@ -245,8 +244,7 @@ impl<K, V> Default for Noop<K, V> {
 impl<K, V> Noop<K, V> {
     pub fn new() -> Self {
         Noop {
-            _phantom_k: PhantomData,
-            _phantom_v: PhantomData,
+            phantom: PhantomData,
         }
     }
 }

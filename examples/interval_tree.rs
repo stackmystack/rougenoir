@@ -45,8 +45,7 @@ where
 }
 
 struct IntervalTreeCallbacks<K, V> {
-    _phantom_k: PhantomData<K>,
-    _phantom_v: PhantomData<V>,
+    phantom: PhantomData<(K, V)>,
 }
 
 impl<K, V> IntervalTreeCallbacks<K, V>
@@ -141,8 +140,7 @@ where
         IntervalTree {
             root: Root {
                 callbacks: IntervalTreeCallbacks {
-                    _phantom_k: PhantomData,
-                    _phantom_v: PhantomData,
+                    phantom: PhantomData,
                 },
                 node: None,
             },

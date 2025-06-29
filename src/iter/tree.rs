@@ -44,8 +44,7 @@ impl<K, V, C> Tree<K, V, C> {
             first: self.root.first(),
             last: self.root.last(),
             len: self.len,
-            _phantom_k: PhantomData,
-            _phantom_v: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -79,8 +78,7 @@ impl<K, V, C> Tree<K, V, C> {
             first: self.root.first(),
             last: self.root.first(),
             len: self.len,
-            _phantom_k: PhantomData,
-            _phantom_v: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -251,8 +249,7 @@ impl<K, V, C> IntoIter<K, V, C> {
             first: self.0.root.first(),
             last: self.0.root.last(),
             len: self.0.len,
-            _phantom_k: PhantomData,
-            _phantom_v: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -315,8 +312,7 @@ pub struct Iter<'a, K, V> {
     first: NodePtr<K, V>,
     last: NodePtr<K, V>,
     len: usize,
-    _phantom_k: PhantomData<&'a K>,
-    _phantom_v: PhantomData<&'a V>,
+    phantom: PhantomData<(&'a K, &'a V)>,
 }
 
 impl<'a, K, V, C: TreeCallbacks<Key = K, Value = V>> IntoIterator for &'a Tree<K, V, C> {
@@ -388,8 +384,7 @@ impl<K, V> Clone for Iter<'_, K, V> {
             first: self.first,
             last: self.last,
             len: self.len,
-            _phantom_k: PhantomData,
-            _phantom_v: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -398,8 +393,7 @@ pub struct IterMut<'a, K, V> {
     first: NodePtr<K, V>,
     last: NodePtr<K, V>,
     len: usize,
-    _phantom_k: PhantomData<&'a K>,
-    _phantom_v: PhantomData<&'a mut V>,
+    phantom: PhantomData<(&'a K, &'a V)>,
 }
 
 impl<'a, K, V, C> IntoIterator for &'a mut Tree<K, V, C> {
@@ -471,8 +465,7 @@ impl<K, V> Clone for IterMut<'_, K, V> {
             first: self.first,
             last: self.last,
             len: self.len,
-            _phantom_k: PhantomData,
-            _phantom_v: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
