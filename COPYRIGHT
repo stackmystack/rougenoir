@@ -1,0 +1,9 @@
+Linux' red-black tree, in C:
+
+    (C) 1999  Andrea Arcangeli <andrea@suse.de>
+    (C) 2002  David Woodhouse <dwmw2@infradead.org>
+    (C) 2012  Michel Lespinasse <walken@google.com>
+
+rougenoir implementation, in Rust:
+
+    (C) 2025  Firas al-Khalil <firasalkhalil@gmail.com>

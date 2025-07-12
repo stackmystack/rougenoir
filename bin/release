@@ -1,0 +1,80 @@
+#! /usr/bin/env bash
+
+set -e
+
+usage() {
+  cat <<EOF
+Usage:
+  $(basename "$0") <version>
+
+Arguments:
+<version> The version for the release (e.g., 1.2.3 or v1.2.3).
+          Must follow Semantic Versioning (https://semver.org).
+
+Example:
+  $(basename "$0") v1.4.2
+
+EOF
+  exit 1
+}
+
+if [[ -z "$1" ]]; then
+  echo "Error: No version specified." >&2
+  echo
+  usage
+fi
+
+version_number="${1#v}"
+tag_name="v${version_number}"
+
+# --- SemVer Validation ---
+semver_regex="^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$"
+if ! [[ "$version_number" =~ $semver_regex ]]; then
+  echo "Error: Invalid version format: '$1'. Please use a valid semantic version." >&2
+  echo
+  usage
+fi
+
+# --- Confirmation Prompt ---
+echo "You are about to create release: $tag_name"
+read -p "Proceed? (Y/n) " -r REPLY
+echo
+
+if [[ "$REPLY" =~ ^[nN]$ ]]; then
+  echo "Cancelled."
+  exit 1
+fi
+
+# --- Release Actions ---
+project_name=$(sed -n '/^\[package\]/,/^\[/ { s/^name = "\([^"]*\)".*/\1/p }' Cargo.toml)
+today=$(date +%F)
+sed -i "/^\[package\]/,/^\[/s/^version = .*/version = \"$version_number\"/" Cargo.toml
+sed -i -E "s/^$project_name = \"[0-9]+\.[0-9]+\.[0-9]+\"/$project_name = \"${version_number}\"/" README.md
+sed -i "s/^## Unreleased/## Unreleased\n\n## [$version_number] - $today/" CHANGELOG.md
+changelog==$(awk '
+  /^## \[/ {
+    if (in_section) {
+      exit
+    }
+    in_section = 1
+  }
+  in_section {
+    print
+  }
+' CHANGELOG.md)
+
+just build
+
+echo "Creating commit and tag ..."
+git add -A && git commit -m "release: $tag_name"
+git tag -a "$tag_name" -m "Release $version_number" -m "$changelog"
+
+# --- Final Instructions ---
+echo
+echo "Created Release $tag_name"
+echo
+echo "Now, push the commit:"
+echo "  git push origin master"
+echo
+echo "Wait for the CI to pass, and then push the tag:"
+echo "  git push origin refs/tags/$tag_name"

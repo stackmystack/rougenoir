@@ -1,0 +1,22 @@
+[package]
+authors = ["Firas al-Khalil <firasalkhalil@gmail.com>"]
+description = "A red-black tree and set with callbacks"
+edition = "2024"
+license = "GPL-2.0-only"
+name = "rougenoir"
+version = "0.1.0"
+
+[dependencies]
+
+[dev-dependencies]
+criterion = "0.6"
+pretty_assertions = "1"
+quickcheck = "1"
+quickcheck_macros = "1"
+rand = "0.9"
+rand_chacha = "0.9"
+rbtree = "0.2"
+
+[[bench]]
+name = "tree"
+harness = false
