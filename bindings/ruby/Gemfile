@@ -1,0 +1,26 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+# Specify your gem's dependencies in rougenoir_ruby.gemspec
+gemspec
+
+# build
+gem "rake"
+gem "rake-compiler"
+
+# dev
+gem "irb"
+gem "ruby-lsp"
+
+# checks
+gem "rubocop"
+gem "ruby_memcheck" if RUBY_PLATFORM =~ /linux/i
+
+# test
+gem "minitest"
+gem "minitest-focus"
+gem "minitest-reporters"
+
+# bench
+gem "rbtree"

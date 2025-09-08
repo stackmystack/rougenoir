@@ -1,0 +1,14 @@
+[package]
+name = "rougenoir_ruby"
+version = "0.1.0"
+edition = "2021"
+authors = ["Firas al-Khalil <firasalkhalil@gmail.com>"]
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+magnus = { workspace = true }
+rougenoir = { workspace = true }

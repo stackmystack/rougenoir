@@ -1,0 +1,16 @@
+/.bundle/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/sig/
+/spec/reports/
+/tmp/
+/vendor/
+*.bundle
+*.so
+*.o
+*.a
+mkmf.log
+target/

@@ -1,0 +1,11 @@
+# This Cargo.toml is here to let externals tools (IDEs, etc.) know that this is
+# a Rust project. Your extensions dependencies should be added to the Cargo.toml
+# in the ext/ directory.
+
+[workspace]
+members = ["./ext/rougenoir_ruby"]
+resolver = "2"
+
+[workspace.dependencies]
+magnus = { version = "0.8.1" }
+rougenoir = { path = "../.." }
