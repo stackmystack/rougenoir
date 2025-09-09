@@ -63,9 +63,12 @@ struct TreeMut {
 impl DataTypeFunctions for TreeMut {
     fn mark(&self, marker: &Marker) {
         println!("GCCCCCCCCCCCCCCCCCCCCCCC");
-        for (k, v) in self.inner.borrow().iter() {
-            marker.mark(k.value);
-            marker.mark(v.value);
+        // NOTE: Should we clone the values and then call mark separately? Benchmarks, right?
+        if let Ok(inner) = self.inner.try_borrow() {
+            for (k, v) in inner.iter() {
+                marker.mark(k.value);
+                marker.mark(v.value);
+            }
         }
     }
 }
