@@ -6,7 +6,6 @@ use magnus::{
 use rougenoir::Noop;
 
 static METHOD_SPACESHIP: &str = "<=>";
-static METHOD_CMP: &str = "rougenoir_cmp";
 
 #[derive(Debug)]
 struct TreeValue {
@@ -16,14 +15,11 @@ struct TreeValue {
 #[derive(Debug)]
 struct TreeKey {
     value: Value,
-    method: &'static str,
 }
 
 impl TreeKey {
-    fn cmp_method_of(v: Value) -> Option<&'static str> {
-        [METHOD_SPACESHIP, METHOD_CMP]
-            .into_iter()
-            .find(|&m| v.respond_to(m, false).ok() == Some(true))
+    fn is_comparable(v: Value) -> bool {
+        v.respond_to(METHOD_SPACESHIP, false).is_ok()
     }
 }
 
@@ -38,7 +34,7 @@ impl Eq for TreeKey {}
 impl PartialOrd for TreeKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.value
-            .funcall(self.method, (other.value,))
+            .funcall(METHOD_SPACESHIP, (other.value,))
             .map(|v: i64| v.cmp(&0))
             .ok()
     }
@@ -46,17 +42,12 @@ impl PartialOrd for TreeKey {
 
 impl Ord for TreeKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).expect(&format!(
-            "The comparison method `{}#{}` is not behaving like Ruby's spaceship operator `<=>`",
-            self.value.class(),
-            self.method
-        ))
+        let ruby = unsafe { Ruby::get_unchecked() };
+        print!("{self:?}, {other:?} ",);
+        let res = self.partial_cmp(other).unwrap();
+        println!(" #{res:?}");
+        res
     }
-}
-
-#[derive(Default)]
-struct Tree {
-    inner: rougenoir::Tree<TreeKey, TreeValue, Noop<TreeKey, TreeValue>>,
 }
 
 // SAFETY: They're only constructed in ruby threads.
@@ -66,12 +57,13 @@ unsafe impl<'a> Send for TreeValue {}
 #[derive(Default, magnus::TypedData)]
 #[magnus(class = "RougeNoir::Tree", free_immediately, mark, size)]
 struct TreeMut {
-    inner: RefCell<Tree>,
+    inner: RefCell<rougenoir::Tree<TreeKey, TreeValue, Noop<TreeKey, TreeValue>>>,
 }
 
 impl DataTypeFunctions for TreeMut {
     fn mark(&self, marker: &Marker) {
-        for (k, v) in self.inner.borrow().inner.iter() {
+        println!("GCCCCCCCCCCCCCCCCCCCCCCC");
+        for (k, v) in self.inner.borrow().iter() {
             marker.mark(k.value);
             marker.mark(v.value);
         }
@@ -82,22 +74,24 @@ impl TreeMut {
     fn initialize(&self) {}
 
     fn insert(&self, k: Value, v: Value) -> Result<Option<Value>, Error> {
-        if let Some(method) = TreeKey::cmp_method_of(v) {
-            let this = &mut self.inner.borrow_mut().inner;
-            Ok(this
-                .insert(TreeKey { value: k, method }, TreeValue { value: v })
-                .map(|v| v.value))
+        if TreeKey::is_comparable(v) {
+            let this = &mut self.inner.borrow_mut();
+            let ruby = Ruby::get_with(v);
+            // ruby.gc_disable();
+            let res = this.insert(TreeKey { value: k }, TreeValue { value: v });
+            // ruby.gc_enable();
+            Ok(res.map(|v| v.value))
         } else {
             let ruby = Ruby::get_with(v);
             Err(Error::new(
                 ruby.exception_arg_error(),
-                "RougeNoir::Tree accepts keys that respond to `{METHOD_SPACESHIP}` or `{METHOD_CMP}`",
+                "RougeNoir::Tree accepts keys that respond to `{METHOD_SPACESHIP}`",
             ))
         }
     }
 
     fn inspect(&self) {
-        let this = &self.inner.borrow_mut().inner;
+        let this = &self.inner.borrow_mut();
         println!("{{");
         for n in this.iter() {
             println!("  ({k}, {v})", k = n.0.value, v = n.1.value);
