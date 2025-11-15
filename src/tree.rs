@@ -3,6 +3,7 @@ use std::{
     cmp::Ordering::{self, *},
     mem,
     ops::Index,
+    ptr::NonNull,
 };
 
 use crate::{ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks};
@@ -623,10 +624,103 @@ where
                     node: None,
                 },
             };
-            for (k, v) in self.iter() {
-                tree.insert(k.clone(), v.clone());
+            // Recursively clone the tree structure to preserve exact colors and layout
+            if let Some(root) = self.root.node
+                && let Some(cloned_root) = Self::clone_node_recursive(root, std::ptr::null_mut())
+            {
+                tree.root.node = Some(cloned_root);
+                tree.len = self.len;
             }
             tree
+        }
+    }
+}
+
+impl<K, V, C> Tree<K, V, C>
+where
+    K: Ord,
+{
+    /// Recursively clone a node and its entire subtree, preserving structure and colors
+    fn clone_node_recursive(
+        node: NonNull<Node<K, V>>,
+        parent: *mut Node<K, V>,
+    ) -> Option<NonNull<Node<K, V>>>
+    where
+        K: Clone,
+        V: Clone,
+    {
+        // SAFETY: by construction, node is valid
+        let node_ref = unsafe { node.as_ref() };
+
+        // Allocate new node with cloned key and value
+        let mut new_node =
+            unsafe { Node::<K, V>::leak(node_ref.key.clone(), node_ref.value.clone()) }?;
+
+        // SAFETY: new_node is non-null
+        {
+            let new_node_ref = unsafe { new_node.as_mut() };
+            new_node_ref.parent_color = parent;
+            // Preserve the original color
+            new_node_ref.set_color(node_ref.color());
+
+            // Recursively clone left subtree
+            if let Some(left) = node_ref.left
+                && let Some(cloned_left) = Self::clone_node_recursive(left, new_node.as_ptr())
+            {
+                new_node_ref.left = Some(cloned_left);
+            }
+
+            // Recursively clone right subtree
+            if let Some(right) = node_ref.right
+                && let Some(cloned_right) = Self::clone_node_recursive(right, new_node.as_ptr())
+            {
+                new_node_ref.right = Some(cloned_right);
+            }
+        }
+
+        Some(new_node)
+    }
+
+    /// Helper: Extract all (key, value, color) tuples in in-order traversal
+    #[cfg(test)]
+    fn extract_tree_contents(&self) -> Vec<(K, V, super::Color)>
+    where
+        K: Clone,
+        V: Clone,
+        C: TreeCallbacks<Key = K, Value = V>,
+    {
+        let mut result = Vec::new();
+        if let Some(root) = self.root.node {
+            result.reserve(self.len);
+            Self::extract_tree_contents_recursive(root, &mut result);
+        }
+        result
+    }
+
+    #[cfg(test)]
+    fn extract_tree_contents_recursive(
+        node: NonNull<Node<K, V>>,
+        result: &mut Vec<(K, V, super::Color)>,
+    ) where
+        K: Clone,
+        V: Clone,
+    {
+        // SAFETY: by construction, node is valid.
+        let node_ref = unsafe { node.as_ref() };
+
+        // In-order traversal: left, self, right
+        if let Some(left) = node_ref.left {
+            Self::extract_tree_contents_recursive(left, result);
+        }
+
+        result.push((
+            node_ref.key.clone(),
+            node_ref.value.clone(),
+            node_ref.color(),
+        ));
+
+        if let Some(right) = node_ref.right {
+            Self::extract_tree_contents_recursive(right, result);
         }
     }
 }
@@ -1107,5 +1201,126 @@ mod test {
             assert_eq!(false, tree.contains_key(&k));
         }
         true
+    }
+
+    // ============================================================================
+    // Clone Verification Tests
+    // ============================================================================
+
+    #[quickcheck]
+    fn clone_equals_original(xs: Vec<(isize, isize)>) -> bool {
+        let tree = Tree::<isize, isize, Noop<isize, isize>>::from_iter(xs.into_iter());
+        let cloned = tree.clone();
+        tree == cloned
+    }
+
+    #[quickcheck]
+    fn clone_preserves_all_data(xs: Vec<(isize, isize)>) -> bool {
+        let tree = Tree::<isize, isize, Noop<isize, isize>>::from_iter(xs.into_iter());
+        let cloned = tree.clone();
+
+        // Clone must have same length
+        if tree.len() != cloned.len() {
+            return false;
+        }
+
+        // All keys and values must match in in-order traversal
+        tree.iter()
+            .zip(cloned.iter())
+            .all(|((k1, v1), (k2, v2))| k1 == k2 && v1 == v2)
+    }
+
+    #[quickcheck]
+    fn clone_preserves_bst_property(xs: Vec<(isize, isize)>) -> bool {
+        let tree = Tree::<isize, isize, Noop<isize, isize>>::from_iter(xs.into_iter());
+        let cloned = tree.clone();
+
+        // In-order traversal should yield sorted keys
+        let original_keys: Vec<_> = tree.iter().map(|(k, _)| *k).collect();
+        let cloned_keys: Vec<_> = cloned.iter().map(|(k, _)| *k).collect();
+
+        // All keys must be sorted
+        let is_sorted = |keys: &[isize]| keys.windows(2).all(|w| w[0] < w[1]);
+
+        is_sorted(&original_keys) && is_sorted(&cloned_keys) && original_keys == cloned_keys
+    }
+
+    #[quickcheck]
+    fn clone_independence(xs: Vec<(u8, u8)>) -> bool {
+        let tree = Tree::<u8, u8, Noop<u8, u8>>::from_iter(xs.clone().into_iter());
+        let mut cloned = tree.clone();
+
+        // Modify the clone
+        for (k, _v) in xs.iter().take(xs.len() / 2 + 1) {
+            cloned.remove(k);
+        }
+
+        // Original should be unchanged
+        let original_after: Vec<_> = tree.iter().map(|(k, v)| (*k, *v)).collect();
+        let original_fresh = Tree::<u8, u8, Noop<u8, u8>>::from_iter(xs.into_iter());
+        let original_fresh_contents: Vec<_> =
+            original_fresh.iter().map(|(k, v)| (*k, *v)).collect();
+
+        original_after == original_fresh_contents
+    }
+
+    #[test]
+    fn clone_empty_tree() {
+        let tree: Tree<isize, isize, Noop<isize, isize>> = Tree::new();
+        let cloned = tree.clone();
+        assert_eq!(tree, cloned);
+        assert_eq!(tree.len(), cloned.len());
+        assert_eq!(tree.is_empty(), cloned.is_empty());
+    }
+
+    #[test]
+    fn clone_single_node() {
+        let mut tree = Tree::new();
+        tree.insert(42, 100);
+        let cloned = tree.clone();
+
+        assert_eq!(tree, cloned);
+        assert_eq!(tree.len(), 1);
+        assert_eq!(cloned.len(), 1);
+
+        // Check that root is black
+        if let Some(root) = tree.root.node {
+            // SAFETY: root is valid
+            assert!(unsafe { root.as_ref() }.is_black());
+        }
+
+        if let Some(root) = cloned.root.node {
+            // SAFETY: root is valid
+            assert!(unsafe { root.as_ref() }.is_black());
+        }
+    }
+
+    #[test]
+    fn clone_multi_node_colors() {
+        let mut tree = Tree::new();
+        // Insert in a specific order to create a tree with mixed colors
+        tree.insert(50, "fifty");
+        tree.insert(25, "twenty-five");
+        tree.insert(75, "seventy-five");
+        tree.insert(12, "twelve");
+        tree.insert(37, "thirty-seven");
+        tree.insert(62, "sixty-two");
+        tree.insert(87, "eighty-seven");
+
+        let cloned = tree.clone();
+
+        // Verify content preservation
+        let original_contents = tree.extract_tree_contents();
+        let cloned_contents = cloned.extract_tree_contents();
+
+        assert_eq!(original_contents.len(), cloned_contents.len());
+
+        // Verify complete content including colors
+        assert_eq!(original_contents, cloned_contents);
+
+        // Verify in-order traversal matches
+        let original_keys: Vec<_> = tree.iter().map(|(k, _)| *k).collect();
+        let cloned_keys: Vec<_> = cloned.iter().map(|(k, _)| *k).collect();
+        assert_eq!(original_keys, cloned_keys);
     }
 }

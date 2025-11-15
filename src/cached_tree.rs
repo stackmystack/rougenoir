@@ -148,6 +148,99 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     }
 }
 
+impl<K, V, C> CachedTree<K, V, C>
+where
+    K: Ord,
+{
+    /// Build a complete balanced RB-tree from a sorted iterator in O(n) time.
+    /// Returns the root node pointer if successful.
+    ///
+    /// # Safety
+    ///
+    /// This function uses unsafe pointer operations consistent with the tree's
+    /// existing patterns. The returned node, if Some, is properly initialized
+    /// and ready to be assigned to root.node.
+    fn build_from_sorted_impl(
+        _tree: &mut Self,
+        items: impl Iterator<Item = (K, V)>,
+        count: usize,
+    ) -> Option<std::ptr::NonNull<Node<K, V>>> {
+        if count == 0 {
+            return None;
+        }
+
+        // Build recursively in a way that creates a complete binary tree
+        let mut iter = items.peekable();
+        Self::build_recursive(&mut iter, count, std::ptr::null_mut()).map(|mut root| {
+            // Root is always black in RB-trees
+            unsafe { root.as_mut() }.set_color(crate::Color::Black);
+            root
+        })
+    }
+
+    /// Recursively build a subtree from `count` items from the iterator.
+    /// Parent pointer is set to `parent` (null for root).
+    ///
+    /// # Safety
+    ///
+    /// Returns a properly linked subtree with parent pointers set.
+    /// The returned node is safe to dereference and has allocated children.
+    fn build_recursive<I>(
+        iter: &mut std::iter::Peekable<I>,
+        count: usize,
+        parent: *mut Node<K, V>,
+    ) -> Option<std::ptr::NonNull<Node<K, V>>>
+    where
+        I: Iterator<Item = (K, V)>,
+    {
+        if count == 0 {
+            return None;
+        }
+
+        // For a complete binary tree with `count` nodes,
+        // calculate how many nodes go in the left subtree
+        let height = (count as u32).ilog2();
+        let max_last_level = 1 << height; // 2^height
+        let complement = count - (max_last_level - 1);
+        let left_count = if complement > max_last_level / 2 {
+            max_last_level / 2
+        } else {
+            complement - 1
+        };
+
+        // Build left subtree (will be filled by iterator order)
+        let left_subtree = Self::build_recursive(iter, left_count, parent);
+
+        // Allocate current node
+        let (key, value) = iter.next()?;
+        let mut node = unsafe { Node::<K, V>::leak(key, value) }?;
+
+        // SAFETY: node is non-null by the above check
+        {
+            let node_ref = unsafe { node.as_mut() };
+            node_ref.parent_color = parent;
+            node_ref.left = left_subtree;
+            // Set left child's parent
+            if let Some(mut left) = left_subtree {
+                unsafe { left.as_mut() }.set_parent(node.as_ptr());
+            }
+            // Color the node red initially
+            node_ref.set_color(crate::Color::Red);
+        }
+
+        // Build right subtree
+        let right_count = count - left_count - 1;
+        let right_subtree = Self::build_recursive(iter, right_count, node.as_ptr());
+        unsafe { node.as_mut() }.right = right_subtree;
+        // Set right child's parent
+        if let Some(mut right) = right_subtree {
+            unsafe { right.as_mut() }.set_parent(node.as_ptr());
+        }
+
+        Some(node)
+    }
+}
+
 impl<K, V, C> CachedTree<K, V, C> {
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
@@ -317,8 +410,14 @@ where
                     node: None,
                 },
             };
-            for (k, v) in self.iter() {
-                tree.insert(k.clone(), v.clone());
+            // Build from sorted elements in O(n) time using bottom-up construction
+            let items: Vec<_> = self.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            let len = items.len();
+            if let Some(root) = CachedTree::build_from_sorted_impl(&mut tree, items.into_iter(), len) {
+                tree.root.node = Some(root);
+                tree.len = len;
+                // Cache the leftmost node (first element in in-order traversal)
+                tree.leftmost = tree.root.first();
             }
             tree
         }

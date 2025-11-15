@@ -46,6 +46,7 @@ release:
 
 setup:
   cargo install cargo-nextest typos-cli
+  cargo +nightly install miri
 
 test *args:
   cargo nextest run {{args}} --tests --examples
