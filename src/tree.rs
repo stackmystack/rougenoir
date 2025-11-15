@@ -6,7 +6,7 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, Tree, TreeCallbacks};
+use crate::{ComingFrom, Node, NodePtr, NodePtrExt, Noop, ParentColor, Root, Tree, TreeCallbacks};
 
 impl<K, V> Tree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -659,9 +659,8 @@ where
         // SAFETY: new_node is non-null
         {
             let new_node_ref = unsafe { new_node.as_mut() };
-            new_node_ref.parent_color = parent;
-            // Preserve the original color
-            new_node_ref.set_color(node_ref.color());
+            new_node_ref.parent_color = ParentColor::new(parent, node_ref.color());
+            // Color is already set via ParentColor::new above
 
             // Recursively clone left subtree
             if let Some(left) = node_ref.left

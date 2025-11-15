@@ -284,13 +284,13 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
             // Note that if there is one child it must be red due to 5) and node
             // must be black due to 4). We adjust colors locally so as to bypass
             // __rb_erase_color() later on.
-            pc = node.parent_color;
-            parent = Node::from_parent_color(pc);
+            pc = node.parent_color.raw();
+            parent = NonNull::new(node.parent_color.parent());
             self.change_child(node.into(), child, parent);
             rebalance = if child.is_some() {
                 child.set_parent_color(pc);
                 None
-            } else if Node::<K, V>::parent_color(pc) == Color::Black {
+            } else if node.parent_color.color() == Color::Black {
                 parent
             } else {
                 None
@@ -300,7 +300,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
             // Still case 1, but this time the child is node->rb_left
             pc = node.parent_color;
             tmp.set_parent_color(pc);
-            parent = Node::from_parent_color(pc);
+            parent = pc.non_null();
             self.change_child(node.into(), tmp, parent);
             rebalance = None;
             tmp = parent;
@@ -355,8 +355,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
             successor.set_left(tmp);
             tmp.set_parent(successor.ptr());
 
-            pc = node.parent_color;
-            tmp = Node::from_parent_color(pc);
+            pc = node.parent_color.raw();
+            tmp = NonNull::new(node.parent_color.parent());
             self.change_child(node.into(), successor, tmp);
             rebalance = if child2.is_some() {
                 child2.set_parent_and_color(parent.ptr(), Color::Black);

@@ -1,17 +1,14 @@
-use std::{
-    fmt::Debug,
-    ptr::{self, NonNull},
-};
+use std::{fmt::Debug, ptr::NonNull};
 
 use crate::ComingFrom;
 
-use super::{Color, Node, NodePtr, NodePtrExt};
+use super::{Color, Node, NodePtr, NodePtrExt, ParentColor};
 
 // Public API.
 impl<K, V> Node<K, V> {
     pub fn new(key: K, value: V) -> Self {
         Node {
-            parent_color: ptr::null_mut(),
+            parent_color: ParentColor::null(),
             right: None,
             left: None,
             key,
@@ -21,12 +18,12 @@ impl<K, V> Node<K, V> {
 
     #[inline(always)]
     pub fn is_black(&self) -> bool {
-        Self::parent_color(self.parent_color) == Color::Black
+        self.parent_color.color() == Color::Black
     }
 
     #[inline(always)]
     pub fn is_red(&self) -> bool {
-        Self::parent_color(self.parent_color) == Color::Red
+        self.parent_color.color() == Color::Red
     }
 
     #[inline(always)]
@@ -58,7 +55,7 @@ impl<K, V> Node<K, V> {
         // [1] get a &mut to parent until we finish from [2] assigning
         // parent_color. Thanks miri.
         let node = unsafe { node.as_mut().unwrap() };
-        node.parent_color = parent; // [2] assigning parent_color
+        node.parent_color = ParentColor::new(parent, Color::Red); // [2] assigning parent_color
         node.left = None;
         node.right = None;
         // [1] get a &mut parent
@@ -114,17 +111,7 @@ impl<K, V> Node<K, V> {
 
     #[inline(always)]
     pub fn parent(&self) -> NodePtr<K, V> {
-        Node::from_parent_color(self.parent_color)
-    }
-
-    #[inline(always)]
-    pub(crate) fn from_parent_color(parent_color: *mut Node<K, V>) -> NodePtr<K, V> {
-        NonNull::new(parent_color.map_addr(|p| p & !3))
-    }
-
-    #[inline(always)]
-    pub fn parent_color(parent_color: *mut Node<K, V>) -> Color {
-        Color::from(parent_color.addr() & 1)
+        NonNull::new(self.parent_color.parent())
     }
 
     #[inline(always)]
@@ -173,22 +160,22 @@ impl<K, V> Node<K, V> {
     /// This is technically [`Self::parent()`] but doesn't reset the color bit.
     #[inline(always)]
     pub fn red_parent(&self) -> NodePtr<K, V> {
-        NonNull::new(self.parent_color)
+        NonNull::new(self.parent_color.raw())
     }
 
     #[inline(always)]
     pub fn set_parent(&mut self, parent: *mut Node<K, V>) {
-        self.parent_color = parent.map_addr(|p| p + self.color() as usize);
+        self.parent_color.set_parent(parent);
     }
 
     #[inline(always)]
     pub fn set_parent_and_color(&mut self, parent: *mut Node<K, V>, color: Color) {
-        self.parent_color = parent.map_addr(|p| p + color as usize);
+        self.parent_color = ParentColor::new(parent, color);
     }
 
     #[inline(always)]
     pub fn set_color(&mut self, color: Color) {
-        self.parent_color = self.parent().ptr().map_addr(|p| p + color as usize);
+        self.parent_color.set_color(color);
     }
 
     #[allow(dead_code)]

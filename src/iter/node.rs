@@ -76,7 +76,7 @@ impl<'a, K, V> IntoIterator for &'a mut Node<K, V> {
 
 impl<'a, K: 'a, V: 'a> DoubleEndedIterator for Iter<'a, K, V> {
     fn next_back(&mut self) -> Option<&'a Node<K, V>> {
-        // SAFETY: If it's unwrappin', it's valid.
+        // SAFETY: If it's unwrapping, it's valid.
         unsafe {
             let current = self.current?.as_ref();
             self.current = current.prev();
@@ -87,7 +87,7 @@ impl<'a, K: 'a, V: 'a> DoubleEndedIterator for Iter<'a, K, V> {
 
 impl<'a, K: 'a, V: 'a> DoubleEndedIterator for IterMut<'a, K, V> {
     fn next_back(&mut self) -> Option<&'a mut Node<K, V>> {
-        // SAFETY: If it's unwrappin', it's valid.
+        // SAFETY: If it's unwrapping, it's valid.
         unsafe {
             let current = self.current?.as_mut();
             self.current = current.prev();

@@ -33,6 +33,78 @@ impl From<usize> for Color {
     }
 }
 
+/// Encodes a parent pointer with color information in the lowest bit.
+///
+/// The color is stored in the lowest bit of the pointer address:
+/// - Bit 0 = 0: Red
+/// - Bit 0 = 1: Black
+///
+/// This is a simple wrapper around a raw pointer with no type constraints,
+/// making it Copy and safe to pass around.
+#[derive(Debug, PartialEq)]
+pub(crate) struct ParentColor<K, V>(*mut Node<K, V>);
+
+impl<K, V> Clone for ParentColor<K, V> {
+    #[inline(always)]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<K, V> Copy for ParentColor<K, V> {}
+
+impl<K, V> ParentColor<K, V> {
+    /// Create a null parent color (no parent)
+    #[inline(always)]
+    pub fn null() -> Self {
+        ParentColor(ptr::null_mut())
+    }
+
+    /// Create a new ParentColor from a parent pointer and color
+    #[inline(always)]
+    pub fn new(parent: *mut Node<K, V>, color: Color) -> Self {
+        ParentColor(parent.map_addr(|p| p + color as usize))
+    }
+
+    /// Extract the parent pointer (clears color bit)
+    #[inline(always)]
+    pub fn parent(&self) -> *mut Node<K, V> {
+        self.0.map_addr(|p| p & !1)
+    }
+
+    /// Extract the color from the lowest bit
+    #[inline(always)]
+    pub fn color(&self) -> Color {
+        Color::from(self.0.addr() & 1)
+    }
+
+    /// Set parent while preserving color
+    #[inline(always)]
+    pub fn set_parent(&mut self, parent: *mut Node<K, V>) {
+        let color = self.color();
+        *self = ParentColor::new(parent, color);
+    }
+
+    /// Set color while preserving parent
+    #[inline(always)]
+    pub fn set_color(&mut self, color: Color) {
+        let parent = self.parent();
+        *self = ParentColor::new(parent, color);
+    }
+
+    /// Get the raw encoded pointer (parent with color bits)
+    #[inline(always)]
+    pub fn raw(&self) -> *mut Node<K, V> {
+        self.0
+    }
+
+    /// Create from raw encoded pointer
+    #[inline(always)]
+    pub fn from_raw(raw: *mut Node<K, V>) -> Self {
+        ParentColor(raw)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ComingFrom {
     Left,
@@ -157,7 +229,7 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     #[inline(always)]
     fn set_parent_color(&mut self, parent_color: *mut Node<K, V>) {
         if let Some(node) = self {
-            unsafe { node.as_mut() }.parent_color = parent_color;
+            unsafe { node.as_mut() }.parent_color = ParentColor::from_raw(parent_color);
         }
     }
 
@@ -202,7 +274,7 @@ impl<K, V> From<&mut Node<K, V>> for NodePtr<K, V> {
 #[derive(Clone, Copy, PartialEq)]
 pub struct Node<K, V> {
     /// The parent pointer with color information in the lowest bit
-    pub(crate) parent_color: *mut Node<K, V>,
+    pub(crate) parent_color: ParentColor<K, V>,
     /// Right Child
     pub right: NodePtr<K, V>,
     /// Left Child

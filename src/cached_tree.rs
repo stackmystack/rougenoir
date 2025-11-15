@@ -5,7 +5,10 @@ use std::{
     ops::Index,
 };
 
-use crate::{CachedTree, ComingFrom, Node, NodePtr, NodePtrExt, Noop, Root, TreeCallbacks};
+use crate::{
+    CachedTree, Color, ComingFrom, Node, NodePtr, NodePtrExt, Noop, ParentColor, Root,
+    TreeCallbacks,
+};
 
 impl<K, V> CachedTree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -173,7 +176,7 @@ where
         let mut iter = items.peekable();
         Self::build_recursive(&mut iter, count, std::ptr::null_mut()).map(|mut root| {
             // Root is always black in RB-trees
-            unsafe { root.as_mut() }.set_color(crate::Color::Black);
+            unsafe { root.as_mut() }.set_color(Color::Black);
             root
         })
     }
@@ -218,14 +221,14 @@ where
         // SAFETY: node is non-null by the above check
         {
             let node_ref = unsafe { node.as_mut() };
-            node_ref.parent_color = parent;
+            node_ref.parent_color = ParentColor::new(parent, Color::Red);
             node_ref.left = left_subtree;
             // Set left child's parent
             if let Some(mut left) = left_subtree {
                 unsafe { left.as_mut() }.set_parent(node.as_ptr());
             }
             // Color the node red initially
-            node_ref.set_color(crate::Color::Red);
+            node_ref.set_color(Color::Red);
         }
 
         // Build right subtree
@@ -413,7 +416,9 @@ where
             // Build from sorted elements in O(n) time using bottom-up construction
             let items: Vec<_> = self.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             let len = items.len();
-            if let Some(root) = CachedTree::build_from_sorted_impl(&mut tree, items.into_iter(), len) {
+            if let Some(root) =
+                CachedTree::build_from_sorted_impl(&mut tree, items.into_iter(), len)
+            {
                 tree.root.node = Some(root);
                 tree.len = len;
                 // Cache the leftmost node (first element in in-order traversal)
