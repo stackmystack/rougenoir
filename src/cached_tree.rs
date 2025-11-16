@@ -73,7 +73,11 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                     let parent = parent; // [4] by sealing, parent is never null hereafter.
 
                     // SAFETY: guaranteed not null by the while guard.
-                    let current_ref = unsafe { current_node.as_mut().unwrap() };
+                    let current_ref = unsafe {
+                        current_node
+                            .as_mut()
+                            .expect("current_node pointer should be valid")
+                    };
                     match key.cmp(&current_ref.key) {
                         Equal => {
                             // [1] replace an existing value.

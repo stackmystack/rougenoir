@@ -414,10 +414,10 @@ impl<K, V, C> Root<K, V, C> {
             }
             parent = current_ref.parent();
             // drop; don't call rbtree erase => needless overhead.
-            if parent.is_some() {
+            if let Some(mut parent) = parent {
                 match direction.pop() {
-                    Some(ComingFrom::Left) => unsafe { parent.unwrap().as_mut() }.left = None,
-                    Some(ComingFrom::Right) => unsafe { parent.unwrap().as_mut() }.right = None,
+                    Some(ComingFrom::Left) => unsafe { parent.as_mut() }.left = None,
+                    Some(ComingFrom::Right) => unsafe { parent.as_mut() }.right = None,
                     _ => {}
                 }
             }

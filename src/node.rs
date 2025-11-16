@@ -54,12 +54,12 @@ impl<K, V> Node<K, V> {
         // SAFETY: node is guaranteed not null by the caller, but we still can't
         // [1] get a &mut to parent until we finish from [2] assigning
         // parent_color. Thanks miri.
-        let node = unsafe { node.as_mut().unwrap() };
+        let node = unsafe { node.as_mut().expect("node pointer should be valid") };
         node.parent_color = ParentColor::new(parent, Color::Red); // [2] assigning parent_color
         node.left = None;
         node.right = None;
         // [1] get a &mut parent
-        let parent = unsafe { parent.as_mut().unwrap() };
+        let parent = unsafe { parent.as_mut().expect("parent pointer should be valid") };
         match direction {
             ComingFrom::Left => parent.left = node.into(),
             ComingFrom::Right => parent.right = node.into(),
