@@ -164,17 +164,17 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub fn set_parent(&mut self, parent: *mut Node<K, V>) {
+    pub(crate) fn set_parent(&mut self, parent: *mut Node<K, V>) {
         self.parent_color.set_parent(parent);
     }
 
     #[inline(always)]
-    pub fn set_parent_and_color(&mut self, parent: *mut Node<K, V>, color: Color) {
+    pub(crate) fn set_parent_and_color(&mut self, parent: *mut Node<K, V>, color: Color) {
         self.parent_color = ParentColor::new(parent, color);
     }
 
     #[inline(always)]
-    pub fn set_color(&mut self, color: Color) {
+    pub(crate) fn set_color(&mut self, color: Color) {
         self.parent_color.set_color(color);
     }
 

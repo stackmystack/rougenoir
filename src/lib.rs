@@ -38,11 +38,8 @@ impl From<usize> for Color {
 /// The color is stored in the lowest bit of the pointer address:
 /// - Bit 0 = 0: Red
 /// - Bit 0 = 1: Black
-///
-/// This is a simple wrapper around a raw pointer with no type constraints,
-/// making it Copy and safe to pass around.
 #[derive(Debug, PartialEq)]
-pub struct ParentColor<K, V>(*mut Node<K, V>);
+pub(crate) struct ParentColor<K, V>(*mut Node<K, V>);
 
 impl<K, V> Clone for ParentColor<K, V> {
     #[inline(always)]
@@ -126,10 +123,6 @@ pub trait NodePtrExt {
 
     fn maybe_ref(&self) -> Option<&Node<Self::Key, Self::Value>>;
     fn maybe_mut_ref(&mut self) -> Option<&mut Node<Self::Key, Self::Value>>;
-    /// # Safety
-    ///
-    /// This is an internal API. Don't use directly, and most importantly, don't drop manually.
-    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value>;
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
     fn left(&self) -> NodePtr<Self::Key, Self::Value>;
@@ -143,8 +136,18 @@ pub trait NodePtrExt {
     #[allow(dead_code)]
     fn prev_node(&self) -> NodePtr<Self::Key, Self::Value>;
     fn ptr(&self) -> *mut Node<Self::Key, Self::Value>;
-    fn red_parent(&self) -> NodePtr<Self::Key, Self::Value>;
     fn right(&self) -> NodePtr<Self::Key, Self::Value>;
+}
+
+pub(crate) trait NodePtrImplExt {
+    type Key;
+    type Value;
+
+    /// # Safety
+    ///
+    /// This is an internal API. Don't use directly, and most importantly, don't drop manually.
+    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value>;
+    fn red_parent(&self) -> NodePtr<Self::Key, Self::Value>;
     fn set_color(&mut self, color: Color);
     fn set_left(&mut self, left: NodePtr<Self::Key, Self::Value>);
     fn set_parent(&mut self, parent: *mut Node<Self::Key, Self::Value>);
@@ -165,11 +168,6 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     #[inline(always)]
     fn maybe_mut_ref(&mut self) -> Option<&mut Node<Self::Key, Self::Value>> {
         self.map(|mut n| unsafe { n.as_mut() })
-    }
-
-    #[inline(always)]
-    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value> {
-        self.map(|mut v| unsafe { v.as_mut() }).unwrap()
     }
 
     #[inline(always)]
@@ -208,6 +206,26 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
+    fn left(&self) -> NodePtr<Self::Key, Self::Value> {
+        self.map_or(None, |v| unsafe { v.as_ref() }.left)
+    }
+
+    #[inline(always)]
+    fn right(&self) -> NodePtr<Self::Key, Self::Value> {
+        self.map_or(None, |v| unsafe { v.as_ref() }.right)
+    }
+}
+
+impl<K, V> NodePtrImplExt for NodePtr<K, V> {
+    type Key = K;
+    type Value = V;
+
+    #[inline(always)]
+    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value> {
+        self.map(|mut v| unsafe { v.as_mut() }).unwrap()
+    }
+
+    #[inline(always)]
     fn red_parent(&self) -> NodePtr<Self::Key, Self::Value> {
         self.map_or(None, |v| unsafe { v.as_ref().red_parent() })
     }
@@ -238,16 +256,6 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
         if let Some(node) = self {
             unsafe { node.as_mut() }.parent_color = parent_color;
         }
-    }
-
-    #[inline(always)]
-    fn left(&self) -> NodePtr<Self::Key, Self::Value> {
-        self.map_or(None, |v| unsafe { v.as_ref() }.left)
-    }
-
-    #[inline(always)]
-    fn right(&self) -> NodePtr<Self::Key, Self::Value> {
-        self.map_or(None, |v| unsafe { v.as_ref() }.right)
     }
 
     #[inline(always)]

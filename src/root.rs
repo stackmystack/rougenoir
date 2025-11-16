@@ -1,6 +1,6 @@
 use std::ptr::{self, NonNull};
 
-use super::{Color, Node, NodePtr, NodePtrExt, Root, TreeCallbacks};
+use super::{Color, Node, NodePtr, NodePtrExt, NodePtrImplExt, Root, TreeCallbacks};
 
 impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Default for Root<K, V, C> {
     fn default() -> Self {
