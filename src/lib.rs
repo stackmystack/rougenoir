@@ -42,7 +42,7 @@ impl From<usize> for Color {
 /// This is a simple wrapper around a raw pointer with no type constraints,
 /// making it Copy and safe to pass around.
 #[derive(Debug, PartialEq)]
-pub(crate) struct ParentColor<K, V>(*mut Node<K, V>);
+pub struct ParentColor<K, V>(*mut Node<K, V>);
 
 impl<K, V> Clone for ParentColor<K, V> {
     #[inline(always)]
@@ -99,9 +99,16 @@ impl<K, V> ParentColor<K, V> {
     }
 
     /// Create from raw encoded pointer
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn from_raw(raw: *mut Node<K, V>) -> Self {
         ParentColor(raw)
+    }
+
+    /// Get parent as NonNull pointer (clears color bit)
+    #[inline(always)]
+    pub fn non_null(&self) -> NodePtr<K, V> {
+        NonNull::new(self.parent())
     }
 }
 
@@ -142,7 +149,7 @@ pub trait NodePtrExt {
     fn set_left(&mut self, left: NodePtr<Self::Key, Self::Value>);
     fn set_parent(&mut self, parent: *mut Node<Self::Key, Self::Value>);
     fn set_parent_and_color(&mut self, parent: *mut Node<Self::Key, Self::Value>, color: Color);
-    fn set_parent_color(&mut self, parent_color: *mut Node<Self::Key, Self::Value>);
+    fn set_parent_color(&mut self, parent_color: ParentColor<Self::Key, Self::Value>);
     fn set_right(&mut self, right: NodePtr<Self::Key, Self::Value>);
 }
 
@@ -227,9 +234,9 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
-    fn set_parent_color(&mut self, parent_color: *mut Node<K, V>) {
+    fn set_parent_color(&mut self, parent_color: ParentColor<K, V>) {
         if let Some(node) = self {
-            unsafe { node.as_mut() }.parent_color = ParentColor::from_raw(parent_color);
+            unsafe { node.as_mut() }.parent_color = parent_color;
         }
     }
 
