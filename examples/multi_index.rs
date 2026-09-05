@@ -10,7 +10,9 @@
 // ordered by `id`, one ordered by `name`.
 use std::ptr::NonNull;
 
-use rougenoir::intrusive::{Adapter, Link, Noop, Root, find_by, for_each_postorder, insert_by};
+use rougenoir::intrusive::{
+    Adapter, Link, Noop, RawIter, Root, find_by, for_each_postorder, insert_by,
+};
 use rougenoir::intrusive_adapter;
 
 struct Employee {
@@ -105,6 +107,25 @@ impl EmployeeStore {
         self.len -= 1;
         true
     }
+
+    /// Employees in ascending `id` order — the same `RawIter` core `by_id`
+    /// and `by_name` share, aimed at whichever `Link` field is relevant.
+    fn iter_by_id(&self) -> impl Iterator<Item = &Employee> {
+        // SAFETY: every link reachable from self.by_id.node points at a live
+        // Employee borrowed for the lifetime of &self, and this tree
+        // contains exactly self.len of them.
+        unsafe { RawIter::<ByIdAdapter>::new(self.by_id.node, self.len) }
+            // SAFETY: n points at a live Employee borrowed above.
+            .map(|n| unsafe { n.as_ref() })
+    }
+
+    /// Employees in ascending `name` order.
+    fn iter_by_name(&self) -> impl Iterator<Item = &Employee> {
+        // SAFETY: see `iter_by_id`, for the `by_name` tree instead.
+        unsafe { RawIter::<ByNameAdapter>::new(self.by_name.node, self.len) }
+            // SAFETY: n points at a live Employee borrowed above.
+            .map(|n| unsafe { n.as_ref() })
+    }
 }
 
 impl Drop for EmployeeStore {
@@ -134,6 +155,11 @@ fn main() {
 
     assert_eq!(store.get_by_id(1).map(|e| e.name.as_str()), Some("alice"));
     assert_eq!(store.get_by_name("carol").map(|e| e.id), Some(3));
+
+    let ids: Vec<_> = store.iter_by_id().map(|e| e.id).collect();
+    assert_eq!(ids, vec![1, 2, 3]);
+    let names: Vec<_> = store.iter_by_name().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, vec!["alice", "bob", "carol"]);
 
     store.remove(2);
     assert!(store.get_by_id(2).is_none());
@@ -195,6 +221,23 @@ mod test {
         assert_eq!(store.get_by_name("carol").map(|e| e.id), Some(3));
 
         assert!(!store.remove(99));
+    }
+
+    #[test]
+    fn iter_by_id_and_iter_by_name_each_walk_their_own_order() {
+        let mut store = EmployeeStore::new();
+        let names = ["mallory", "alice", "eve", "carol", "bob", "trent"];
+        for (id, name) in names.iter().enumerate() {
+            store.insert(id as u32, *name);
+        }
+
+        let by_id: Vec<_> = store.iter_by_id().map(|e| e.id).collect();
+        assert_eq!(by_id, (0..names.len() as u32).collect::<Vec<_>>());
+
+        let by_name: Vec<_> = store.iter_by_name().map(|e| e.name.as_str()).collect();
+        let mut expected_names = names.to_vec();
+        expected_names.sort_unstable();
+        assert_eq!(by_name, expected_names);
     }
 
     #[test]

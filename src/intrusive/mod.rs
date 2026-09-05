@@ -9,6 +9,7 @@
 mod adapter;
 mod callbacks;
 mod convenience;
+mod iter;
 mod link;
 mod node_ptr;
 mod root;
@@ -18,6 +19,7 @@ pub use callbacks::{Noop, TreeCallbacks};
 pub use convenience::{
     InsertPosition, find_by, find_insert_position, for_each_postorder, insert_by,
 };
+pub use iter::RawIter;
 pub use link::Link;
 pub use root::Root;
 #[cfg(debug_assertions)]

@@ -4,7 +4,7 @@ use std::{
     ptr::{self},
 };
 
-use crate::{Node, NodePtr, Tree, TreeCallbacks};
+use crate::{Node, NodeAdapter, Tree, TreeCallbacks, intrusive::RawIter};
 
 impl<K, V, C> Tree<K, V, C> {
     /// Gets an iterator over the keys of the map, in sorted order.
@@ -41,9 +41,10 @@ impl<K, V, C> Tree<K, V, C> {
     /// ```
     pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
-            first: self.root.first(),
-            last: self.root.last(),
-            len: self.len,
+            // SAFETY: every link reachable from self.root.node points at a
+            // live Node<K, V> borrowed for 'a below, and this tree contains
+            // exactly self.len of them.
+            inner: unsafe { RawIter::new(self.root.node.map(Node::link_ptr), self.len) },
             phantom: PhantomData,
         }
     }
@@ -75,9 +76,10 @@ impl<K, V, C> Tree<K, V, C> {
     /// ```
     pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut {
-            first: self.root.first(),
-            last: self.root.first(),
-            len: self.len,
+            // SAFETY: every link reachable from self.root.node points at a
+            // live Node<K, V> exclusively borrowed for 'a below, and this
+            // tree contains exactly self.len of them.
+            inner: unsafe { RawIter::new(self.root.node.map(Node::link_ptr), self.len) },
             phantom: PhantomData,
         }
     }
@@ -246,9 +248,10 @@ impl<K, V, C> IntoIter<K, V, C> {
     #[allow(dead_code)]
     pub(super) fn iter(&self) -> Iter<'_, K, V> {
         Iter {
-            first: self.0.root.first(),
-            last: self.0.root.last(),
-            len: self.0.len,
+            // SAFETY: every link reachable from self.0.root.node points at a
+            // live Node<K, V>, and this tree contains exactly self.0.len of
+            // them.
+            inner: unsafe { RawIter::new(self.0.root.node.map(Node::link_ptr), self.0.len) },
             phantom: PhantomData,
         }
     }
@@ -309,9 +312,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> ExactSizeIterator for IntoIter<
 impl<K, V, C: TreeCallbacks<Key = K, Value = V>> FusedIterator for IntoIter<K, V, C> {}
 
 pub struct Iter<'a, K, V> {
-    first: NodePtr<Node<K, V>>,
-    last: NodePtr<Node<K, V>>,
-    len: usize,
+    inner: RawIter<NodeAdapter<K, V>>,
     phantom: PhantomData<(&'a K, &'a V)>,
 }
 
@@ -328,16 +329,16 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.first.map(|n| {
+        self.inner.next().map(|n| {
+            // SAFETY: n points at a live Node<K, V> borrowed for 'a, per
+            // `Tree::iter`'s contract.
             let n = unsafe { n.as_ref() };
-            self.len -= 1;
-            self.first = n.next();
             (&n.key, &n.value)
         })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.len, Some(self.len))
+        self.inner.size_hint()
     }
 
     fn last(mut self) -> Option<(&'a K, &'a V)> {
@@ -363,10 +364,9 @@ impl<K, V> FusedIterator for Iter<'_, K, V> {}
 
 impl<'a, K: 'a, V: 'a> DoubleEndedIterator for Iter<'a, K, V> {
     fn next_back(&mut self) -> Option<(&'a K, &'a V)> {
-        self.first.map(|n| {
+        self.inner.next_back().map(|n| {
+            // SAFETY: see `Iter::next`.
             let n = unsafe { n.as_ref() };
-            self.len -= 1;
-            self.last = n.prev();
             (&n.key, &n.value)
         })
     }
@@ -374,25 +374,21 @@ impl<'a, K: 'a, V: 'a> DoubleEndedIterator for Iter<'a, K, V> {
 
 impl<K, V> ExactSizeIterator for Iter<'_, K, V> {
     fn len(&self) -> usize {
-        self.len
+        self.inner.len()
     }
 }
 
 impl<K, V> Clone for Iter<'_, K, V> {
     fn clone(&self) -> Self {
         Iter {
-            first: self.first,
-            last: self.last,
-            len: self.len,
+            inner: self.inner.clone(),
             phantom: PhantomData,
         }
     }
 }
 
 pub struct IterMut<'a, K, V> {
-    first: NodePtr<Node<K, V>>,
-    last: NodePtr<Node<K, V>>,
-    len: usize,
+    inner: RawIter<NodeAdapter<K, V>>,
     phantom: PhantomData<(&'a K, &'a V)>,
 }
 
@@ -409,16 +405,16 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
     type Item = (&'a K, &'a mut V);
 
     fn next(&mut self) -> Option<(&'a K, &'a mut V)> {
-        self.first.map(|mut n| {
+        self.inner.next().map(|mut n| {
+            // SAFETY: n points at a live Node<K, V> exclusively borrowed for
+            // 'a, per `Tree::iter_mut`'s contract.
             let n = unsafe { n.as_mut() };
-            self.len -= 1;
-            self.first = n.next();
             (&n.key, &mut n.value)
         })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.len, Some(self.len))
+        self.inner.size_hint()
     }
 
     fn last(mut self) -> Option<(&'a K, &'a mut V)> {
@@ -442,10 +438,9 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
 
 impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
     fn next_back(&mut self) -> Option<(&'a K, &'a mut V)> {
-        self.first.map(|mut n| {
+        self.inner.next_back().map(|mut n| {
+            // SAFETY: see `IterMut::next`.
             let n = unsafe { n.as_mut() };
-            self.len -= 1;
-            self.last = n.prev();
             (&n.key, &mut n.value)
         })
     }
@@ -453,7 +448,7 @@ impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
 
 impl<K, V> ExactSizeIterator for IterMut<'_, K, V> {
     fn len(&self) -> usize {
-        self.len
+        self.inner.len()
     }
 }
 
@@ -462,9 +457,7 @@ impl<K, V> FusedIterator for IterMut<'_, K, V> {}
 impl<K, V> Clone for IterMut<'_, K, V> {
     fn clone(&self) -> Self {
         IterMut {
-            first: self.first,
-            last: self.last,
-            len: self.len,
+            inner: self.inner.clone(),
             phantom: PhantomData,
         }
     }
@@ -950,6 +943,35 @@ mod test {
     }
 
     #[test]
+    fn iter_next_back() {
+        let mut tree = Tree::new();
+        for i in 0..128 {
+            tree.insert(i, ());
+        }
+        let mut iter = tree.iter();
+        for i in (0..128).rev() {
+            assert_eq!(Some((&i, &())), iter.next_back());
+        }
+        assert_eq!(None, iter.next_back());
+        assert_eq!(None, iter.next_back());
+    }
+
+    #[test]
+    fn iter_next_and_next_back_meet_in_the_middle() {
+        let mut tree = Tree::new();
+        for i in 0..10 {
+            tree.insert(i, ());
+        }
+        let mut iter = tree.iter();
+        for i in 0..5 {
+            assert_eq!(Some((&i, &())), iter.next());
+            assert_eq!(Some((&(9 - i), &())), iter.next_back());
+        }
+        assert_eq!(None, iter.next());
+        assert_eq!(None, iter.next_back());
+    }
+
+    #[test]
     fn iter_mut_empty() {
         let mut tree = Tree::<usize, (), Noop<usize, ()>>::new();
         assert_eq!(None, tree.iter_mut().next());
@@ -973,6 +995,20 @@ mod test {
         let res = res.unwrap();
         res.1.push_str(stomp);
         assert_eq!(&format!("{zero}{stomp}"), res.1);
+    }
+
+    #[test]
+    fn iter_mut_next_back() {
+        let mut tree = Tree::new();
+        for i in 0..128 {
+            tree.insert(i, ());
+        }
+        let mut iter = tree.iter_mut();
+        for i in (0..128).rev() {
+            assert_eq!(Some((&i, &mut ())), iter.next_back());
+        }
+        assert_eq!(None, iter.next_back());
+        assert_eq!(None, iter.next_back());
     }
 
     #[test]

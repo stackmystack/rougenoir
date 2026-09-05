@@ -9,7 +9,7 @@ use std::{marker::PhantomData, ptr::NonNull};
 
 use rougenoir::{
     Color, ComingFrom,
-    intrusive::{Adapter, Link, Root, TreeCallbacks, for_each_postorder},
+    intrusive::{Adapter, Link, RawIter, Root, TreeCallbacks, for_each_postorder},
     intrusive_adapter,
 };
 
@@ -236,6 +236,18 @@ where
             }
         }
     }
+
+    /// Iterates over every interval in ascending order, yielding `(from, to, &value)`.
+    pub fn iter(&self) -> impl Iterator<Item = (K, K, &V)> {
+        // SAFETY: every link reachable from self.root.node points at a live
+        // IntervalNode<K, V> borrowed for the lifetime of &self, and this
+        // tree contains exactly self.len of them.
+        unsafe { RawIter::<IntervalNodeAdapter<K, V>>::new(self.root.node, self.len) }.map(|n| {
+            // SAFETY: n points at a live IntervalNode borrowed above.
+            let n = unsafe { n.as_ref() };
+            (n.from, n.to, &n.value)
+        })
+    }
 }
 
 impl<K, V> Drop for IntervalTree<K, V>
@@ -266,6 +278,9 @@ fn main() {
     tree.insert((0, 1), 12);
     tree.insert((0, 2), 12);
     tree.insert((0, 3), 12);
+
+    let intervals: Vec<_> = tree.iter().map(|(from, to, _)| (from, to)).collect();
+    assert_eq!(intervals, vec![(0, 1), (0, 2), (0, 3)]);
 }
 
 #[cfg(test)]
@@ -370,6 +385,27 @@ mod test {
         tree.insert((-20, -15), "neg2");
         tree.insert((-5, 5), "crossing");
         assert_eq!(tree.len, 3);
+    }
+
+    #[test]
+    fn iter_visits_every_interval_in_ascending_order() {
+        let mut tree = IntervalTree::new();
+        tree.insert((10, 15), "b");
+        tree.insert((0, 5), "a");
+        tree.insert((20, 25), "c");
+        tree.insert((5, 10), "d");
+
+        let seen: Vec<_> = tree.iter().map(|(from, to, v)| (from, to, *v)).collect();
+        assert_eq!(
+            seen,
+            vec![(0, 5, "a"), (5, 10, "d"), (10, 15, "b"), (20, 25, "c"),]
+        );
+    }
+
+    #[test]
+    fn iter_empty_tree_yields_nothing() {
+        let tree: IntervalTree<i32, &str> = IntervalTree::new();
+        assert_eq!(tree.iter().count(), 0);
     }
 
     #[test]
