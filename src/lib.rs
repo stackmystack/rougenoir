@@ -1,6 +1,7 @@
 //! A red-black (rouge-noir) tree translated from the linux kernel's implementation of red-black trees.
 mod alloc;
 mod cached_tree;
+pub mod intrusive;
 mod iter;
 mod node;
 mod root;
