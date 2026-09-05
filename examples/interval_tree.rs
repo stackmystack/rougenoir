@@ -10,6 +10,7 @@ use std::{marker::PhantomData, ptr::NonNull};
 use rougenoir::{
     Color, ComingFrom,
     intrusive::{Adapter, Link, Root, TreeCallbacks, for_each_postorder},
+    intrusive_adapter,
 };
 
 /// The interval `[from, to]` a caller inserts. `IntervalNode` below is the
@@ -41,20 +42,7 @@ struct IntervalNode<K, V> {
     value: V,
 }
 
-// `intrusive_adapter!` only handles non-generic values (see its docs), so
-// `IntervalNode<K, V>` needs its `Adapter` written by hand — the same shape
-// `crate::NodeAdapter<K, V>` uses internally for `Tree`/`CachedTree`.
-struct IntervalNodeAdapter<K, V>(PhantomData<(K, V)>);
-
-// SAFETY: `link` is genuinely a field of type `Link` on `IntervalNode<K, V>`,
-// so `offset_of!` gives its exact byte offset.
-unsafe impl<K, V> Adapter for IntervalNodeAdapter<K, V> {
-    type Value = IntervalNode<K, V>;
-
-    fn link_offset() -> usize {
-        std::mem::offset_of!(IntervalNode<K, V>, link)
-    }
-}
+intrusive_adapter!(IntervalNodeAdapter<K, V> = IntervalNode<K, V> : link);
 
 struct IntervalTreeCallbacks<K, V> {
     phantom: PhantomData<(K, V)>,

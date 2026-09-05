@@ -147,6 +147,20 @@ pub unsafe trait Adapter {
 ///
 /// intrusive_adapter!(MyObjAdapter = MyObj: link);
 /// ```
+///
+/// The value type can be generic too.
+///
+/// ```
+/// use rougenoir::{intrusive::Link, intrusive_adapter};
+///
+/// struct MyGenericObj<K, V> {
+///     link: Link,
+///     key: K,
+///     value: V,
+/// }
+///
+/// intrusive_adapter!(MyGenericObjAdapter<K, V> = MyGenericObj<K, V>: link);
+/// ```
 #[macro_export]
 macro_rules! intrusive_adapter {
     ($(#[$attr:meta])* $vis:vis $name:ident = $value:ty : $field:ident) => {
@@ -164,6 +178,29 @@ macro_rules! intrusive_adapter {
 
             #[inline]
             fn link_offset() -> usize {
+                ::core::mem::offset_of!($value, $field)
+            }
+        }
+    };
+
+    ($(#[$attr:meta])* $vis:vis $name:ident<$($gen:ident),+ $(,)?> = $value:ty : $field:ident) => {
+        $(#[$attr])*
+        $vis struct $name<$($gen),+>(::core::marker::PhantomData<($($gen,)+)>);
+
+        // SAFETY: the assertion inside `link_offset` below ensures `$field`
+        // is a genuine `Link` field of `$value`; `core::mem::offset_of!`
+        // computes its true byte offset within `$value`.
+        unsafe impl<$($gen),+> $crate::intrusive::Adapter for $name<$($gen),+> {
+            type Value = $value;
+
+            #[inline]
+            fn link_offset() -> usize {
+                // Fails to compile unless `$field` really has type `Link`.
+                // (Unlike the non-generic arm above, this can't be a
+                // top-level `const _: ...` — free consts can't be generic —
+                // so the check lives here, inside a function that already
+                // is.)
+                let _: fn(&$value) -> &$crate::intrusive::Link = |v| &v.$field;
                 ::core::mem::offset_of!($value, $field)
             }
         }
@@ -235,5 +272,36 @@ mod test {
             ByNameAdapter::link_offset(),
             std::mem::offset_of!(Employee, by_name)
         );
+    }
+
+    #[allow(dead_code)]
+    struct Pair<K, V> {
+        link: Link,
+        key: K,
+        value: V,
+    }
+
+    intrusive_adapter!(PairAdapter<K, V> = Pair<K, V>: link);
+
+    #[test]
+    fn generic_value_types_round_trip_too() {
+        let mut pair = Box::new(Pair {
+            link: Link::new(),
+            key: 1u32,
+            value: "one",
+        });
+        let ptr = NonNull::from(&mut *pair);
+
+        assert_eq!(
+            PairAdapter::<u32, &str>::link_offset(),
+            std::mem::offset_of!(Pair<u32, &str>, link)
+        );
+
+        // SAFETY: ptr points at a live Pair<u32, &str> for the duration of
+        // this test.
+        unsafe {
+            let link = PairAdapter::<u32, &str>::get_link(ptr);
+            assert_eq!(PairAdapter::<u32, &str>::get_value(link), ptr);
+        }
     }
 }

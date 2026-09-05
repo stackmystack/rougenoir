@@ -319,22 +319,10 @@ pub struct Node<K, V> {
     pub value: V,
 }
 
-/// Bridges a [`Node<K, V>`]'s embedded [`Link`] back to the whole `Node`.
-///
-/// This is what lets [`Root<K, V, C>`] reuse the exact same pointer-chasing
-/// primitives ([`Link`]'s raw-pointer-based associated functions) as the
-/// public [`intrusive`] API, instead of duplicating them.
-struct NodeAdapter<K, V>(PhantomData<(K, V)>);
-
-// SAFETY: `link` is genuinely a field of type `Link` on `Node<K, V>`, so
-// `offset_of!` gives its exact byte offset.
-unsafe impl<K, V> Adapter for NodeAdapter<K, V> {
-    type Value = Node<K, V>;
-
-    fn link_offset() -> usize {
-        std::mem::offset_of!(Node<K, V>, link)
-    }
-}
+// Bridges a `Node<K, V>`'s embedded `Link` back to the whole `Node`. This
+// is what lets `Root<K, V, C>` reuse the exact same pointer-chasing
+// primitives (`Link`'s raw-pointer-based associated functions)
+intrusive_adapter!(NodeAdapter<K, V> = Node<K, V> : link);
 
 impl<K, V> Node<K, V> {
     /// Converts a pointer to a whole `Node<K, V>` into a pointer to its
