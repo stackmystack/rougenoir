@@ -21,10 +21,10 @@ thought it would be an opportunity to play with `unsafe` rust … and so I did.
   - [`CachedTree`](https://docs.rs/rougenoir/latest/rougenoir/struct.CachedTree.html), a `Tree` where the leftmost entry is cached.
   - [`Set`](https://docs.rs/rougenoir/latest/rougenoir/struct.Set.html).
   - [`Tree`](https://docs.rs/rougenoir/latest/rougenoir/struct.Tree.html).
-- Low-level API to build your own trees.
-  - All the algorithms and data structures implemented exactly like the linux' version, but it's not an intrusive data-structure.
+- A genuinely intrusive low-level API (`rougenoir::intrusive`), in the style of the Linux kernel's `struct rb_node` + `container_of()`: embed a `Link` directly in your own struct — even more than once, to belong to more than one tree at once — and rougenoir never allocates on your behalf.
+  - See the [`interval_tree` example](examples/interval_tree.rs) (one embedded `Link`, augmented) and the [`multi_index` example](examples/multi_index.rs) (two `Link`s on the same struct, two independent trees).
+- A second, simpler low-level API (`Node`/`Root`), where rougenoir owns `K`/`V` and allocation directly — what `Tree`/`CachedTree`/`Set` themselves are built on.
   - Notification on tree modification, aka [Augmentation](#augmentation).
-  - See the [`IntervalTree` example](examples/interval_tree.rs).
 - Checked with [`miri`](https://github.com/rust-lang/miri).
 
 ## Usage
@@ -87,6 +87,33 @@ impl<K, V> TreeCallbacks for SizeAugmentation<K, V> {
 }
 ```
 
+## Intrusive API
+
+For full kernel-style intrusion, embed `rougenoir::intrusive::Link` directly:
+
+```rust
+struct Employee {
+    by_id: Link,
+    by_name: Link,
+    id: u32,
+    name: String,
+}
+
+intrusive_adapter!(ByIdAdapter = Employee: by_id);
+intrusive_adapter!(ByNameAdapter = Employee: by_name);
+
+type IdRoot = Root<ByIdAdapter, Noop<Employee>>;
+type NameRoot = Root<ByNameAdapter, Noop<Employee>>;
+
+struct EmployeeStore {
+    by_id: IdRoot,
+    by_name: NameRoot,
+    len: usize,
+}
+```
+
+See the [multi-index example](examples/multi_index.rs).
+
 ## Benchmarks
 
 You can run the benchmarks with `just bench` or `cargo bench` and check on your local machine.
@@ -110,8 +137,10 @@ allocator can be used.
   - AFAICT the kernel's implementation allows for lock-free concurrency.
   - I'm not a linux expert, so I might be wrong.
   - If it's the case, then adding barriers here might do it?
-- Intrusive rewrite.
-  - I don't want to dismiss the idea, and patches are welcome, but it's not my priority. I'm already satisfied with this implementation.
+- Generic support in `intrusive_adapter!`.
+  - The macro only generates an `Adapter` for non-generic value types today; a
+    generic one (like `Node<K, V>`, or `examples/interval_tree.rs`'s
+    `IntervalNode<K, V>`) needs its `Adapter` written by hand instead.
 
 See [TODO.md](docs/TODO.md).
 
