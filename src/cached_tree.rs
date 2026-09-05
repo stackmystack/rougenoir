@@ -257,7 +257,7 @@ impl<K, V, C> CachedTree<K, V, C> {
         self.find_node(key).is_some()
     }
 
-    fn find_node<Q>(&self, key: &Q) -> NodePtr<K, V>
+    fn find_node<Q>(&self, key: &Q) -> NodePtr<Node<K, V>>
     where
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,

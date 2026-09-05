@@ -3,13 +3,13 @@ use std::{iter::FusedIterator, marker::PhantomData, ptr::NonNull};
 
 /// An iterator over shared references to `Node`s in in-order traversal.
 pub struct Iter<'a, K, V> {
-    current: NodePtr<K, V>,
+    current: NodePtr<Node<K, V>>,
     phantom: PhantomData<&'a Node<K, V>>,
 }
 
 /// An iterator over mutable references to `Node`s in in-order traversal.
 pub struct IterMut<'a, K, V> {
-    current: NodePtr<K, V>,
+    current: NodePtr<Node<K, V>>,
     phantom: PhantomData<&'a mut Node<K, V>>,
 }
 

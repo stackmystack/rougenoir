@@ -39,18 +39,18 @@ impl From<usize> for Color {
 /// - Bit 0 = 0: Red
 /// - Bit 0 = 1: Black
 #[derive(Debug, PartialEq)]
-pub(crate) struct ParentColor<K, V>(*mut Node<K, V>);
+pub(crate) struct ParentColor<N>(*mut N);
 
-impl<K, V> Clone for ParentColor<K, V> {
+impl<N> Clone for ParentColor<N> {
     #[inline(always)]
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<K, V> Copy for ParentColor<K, V> {}
+impl<N> Copy for ParentColor<N> {}
 
-impl<K, V> ParentColor<K, V> {
+impl<N> ParentColor<N> {
     /// Create a null parent color (no parent)
     #[inline(always)]
     pub fn null() -> Self {
@@ -59,13 +59,13 @@ impl<K, V> ParentColor<K, V> {
 
     /// Create a new ParentColor from a parent pointer and color
     #[inline(always)]
-    pub fn new(parent: *mut Node<K, V>, color: Color) -> Self {
+    pub fn new(parent: *mut N, color: Color) -> Self {
         ParentColor(parent.map_addr(|p| p + color as usize))
     }
 
     /// Extract the parent pointer (clears color bit)
     #[inline(always)]
-    pub fn parent(&self) -> *mut Node<K, V> {
+    pub fn parent(&self) -> *mut N {
         self.0.map_addr(|p| p & !1)
     }
 
@@ -77,7 +77,7 @@ impl<K, V> ParentColor<K, V> {
 
     /// Set parent while preserving color
     #[inline(always)]
-    pub fn set_parent(&mut self, parent: *mut Node<K, V>) {
+    pub fn set_parent(&mut self, parent: *mut N) {
         let color = self.color();
         *self = ParentColor::new(parent, color);
     }
@@ -91,20 +91,20 @@ impl<K, V> ParentColor<K, V> {
 
     /// Get the raw encoded pointer (parent with color bits)
     #[inline(always)]
-    pub fn raw(&self) -> *mut Node<K, V> {
+    pub fn raw(&self) -> *mut N {
         self.0
     }
 
     /// Create from raw encoded pointer
     #[allow(dead_code)]
     #[inline(always)]
-    pub fn from_raw(raw: *mut Node<K, V>) -> Self {
+    pub fn from_raw(raw: *mut N) -> Self {
         ParentColor(raw)
     }
 
     /// Get parent as NonNull pointer (clears color bit)
     #[inline(always)]
-    pub fn non_null(&self) -> NodePtr<K, V> {
+    pub fn non_null(&self) -> NodePtr<N> {
         NonNull::new(self.parent())
     }
 }
@@ -115,58 +115,55 @@ pub enum ComingFrom {
     Right,
 }
 
-pub type NodePtr<K, V> = Option<NonNull<Node<K, V>>>;
+pub type NodePtr<N> = Option<NonNull<N>>;
 
 pub trait NodePtrExt {
-    type Key;
-    type Value;
+    type Node;
 
-    fn maybe_ref(&self) -> Option<&Node<Self::Key, Self::Value>>;
-    fn maybe_mut_ref(&mut self) -> Option<&mut Node<Self::Key, Self::Value>>;
+    fn maybe_ref(&self) -> Option<&Self::Node>;
+    fn maybe_mut_ref(&mut self) -> Option<&mut Self::Node>;
     fn is_black(&self) -> bool;
     fn is_red(&self) -> bool;
-    fn left(&self) -> NodePtr<Self::Key, Self::Value>;
+    fn left(&self) -> NodePtr<Self::Node>;
     /// # Safety
     ///
     /// This should not be called on null ptrs.
-    unsafe fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: ComingFrom);
+    unsafe fn link(&mut self, parent: *mut Self::Node, direction: ComingFrom);
     #[allow(dead_code)]
-    fn next_node(&self) -> NodePtr<Self::Key, Self::Value>;
-    fn parent(&self) -> NodePtr<Self::Key, Self::Value>;
+    fn next_node(&self) -> NodePtr<Self::Node>;
+    fn parent(&self) -> NodePtr<Self::Node>;
     #[allow(dead_code)]
-    fn prev_node(&self) -> NodePtr<Self::Key, Self::Value>;
-    fn ptr(&self) -> *mut Node<Self::Key, Self::Value>;
-    fn right(&self) -> NodePtr<Self::Key, Self::Value>;
+    fn prev_node(&self) -> NodePtr<Self::Node>;
+    fn ptr(&self) -> *mut Self::Node;
+    fn right(&self) -> NodePtr<Self::Node>;
 }
 
 pub(crate) trait NodePtrImplExt {
-    type Key;
-    type Value;
+    type Node;
 
     /// # Safety
     ///
     /// This is an internal API. Don't use directly, and most importantly, don't drop manually.
-    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value>;
-    fn red_parent(&self) -> NodePtr<Self::Key, Self::Value>;
+    unsafe fn mut_ref(&mut self) -> &mut Self::Node;
+    fn red_parent(&self) -> NodePtr<Self::Node>;
     fn set_color(&mut self, color: Color);
-    fn set_left(&mut self, left: NodePtr<Self::Key, Self::Value>);
-    fn set_parent(&mut self, parent: *mut Node<Self::Key, Self::Value>);
-    fn set_parent_and_color(&mut self, parent: *mut Node<Self::Key, Self::Value>, color: Color);
-    fn set_parent_color(&mut self, parent_color: ParentColor<Self::Key, Self::Value>);
-    fn set_right(&mut self, right: NodePtr<Self::Key, Self::Value>);
+    fn set_left(&mut self, left: NodePtr<Self::Node>);
+    fn set_parent(&mut self, parent: *mut Self::Node);
+    fn set_parent_and_color(&mut self, parent: *mut Self::Node, color: Color);
+    fn set_parent_color(&mut self, parent_color: ParentColor<Self::Node>);
+    fn set_right(&mut self, right: NodePtr<Self::Node>);
 }
 
-impl<K, V> NodePtrExt for NodePtr<K, V> {
-    type Key = K;
-    type Value = V;
+impl<K, V> NodePtrExt for NodePtr<Node<K, V>> {
+    type Node = Node<K, V>;
 
     #[inline(always)]
-    fn maybe_ref(&self) -> Option<&Node<Self::Key, Self::Value>> {
+    fn maybe_ref(&self) -> Option<&Self::Node> {
         self.map(|n| unsafe { n.as_ref() })
     }
 
     #[inline(always)]
-    fn maybe_mut_ref(&mut self) -> Option<&mut Node<Self::Key, Self::Value>> {
+    fn maybe_mut_ref(&mut self) -> Option<&mut Self::Node> {
         self.map(|mut n| unsafe { n.as_mut() })
     }
 
@@ -181,52 +178,51 @@ impl<K, V> NodePtrExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
-    unsafe fn link(&mut self, parent: *mut Node<Self::Key, Self::Value>, direction: ComingFrom) {
+    unsafe fn link(&mut self, parent: *mut Self::Node, direction: ComingFrom) {
         self.map(|mut v| unsafe { Node::link(v.as_mut(), parent, direction) });
     }
 
     #[inline(always)]
-    fn next_node(&self) -> NodePtr<Self::Key, Self::Value> {
+    fn next_node(&self) -> NodePtr<Self::Node> {
         self.map(|v| unsafe { v.as_ref() }.next()).flatten()
     }
 
     #[inline(always)]
-    fn parent(&self) -> NodePtr<Self::Key, Self::Value> {
+    fn parent(&self) -> NodePtr<Self::Node> {
         self.map_or(None, |v| unsafe { v.as_ref() }.parent())
     }
 
     #[inline(always)]
-    fn prev_node(&self) -> NodePtr<Self::Key, Self::Value> {
+    fn prev_node(&self) -> NodePtr<Self::Node> {
         self.map(|v| unsafe { v.as_ref() }.prev()).flatten()
     }
 
     #[inline(always)]
-    fn ptr(&self) -> *mut Node<Self::Key, Self::Value> {
+    fn ptr(&self) -> *mut Self::Node {
         self.map_or(ptr::null_mut(), |p| p.as_ptr())
     }
 
     #[inline(always)]
-    fn left(&self) -> NodePtr<Self::Key, Self::Value> {
+    fn left(&self) -> NodePtr<Self::Node> {
         self.map_or(None, |v| unsafe { v.as_ref() }.left)
     }
 
     #[inline(always)]
-    fn right(&self) -> NodePtr<Self::Key, Self::Value> {
+    fn right(&self) -> NodePtr<Self::Node> {
         self.map_or(None, |v| unsafe { v.as_ref() }.right)
     }
 }
 
-impl<K, V> NodePtrImplExt for NodePtr<K, V> {
-    type Key = K;
-    type Value = V;
+impl<K, V> NodePtrImplExt for NodePtr<Node<K, V>> {
+    type Node = Node<K, V>;
 
     #[inline(always)]
-    unsafe fn mut_ref(&mut self) -> &mut Node<Self::Key, Self::Value> {
+    unsafe fn mut_ref(&mut self) -> &mut Self::Node {
         self.map(|mut v| unsafe { v.as_mut() }).unwrap()
     }
 
     #[inline(always)]
-    fn red_parent(&self) -> NodePtr<Self::Key, Self::Value> {
+    fn red_parent(&self) -> NodePtr<Self::Node> {
         self.map_or(None, |v| unsafe { v.as_ref().red_parent() })
     }
 
@@ -238,48 +234,48 @@ impl<K, V> NodePtrImplExt for NodePtr<K, V> {
     }
 
     #[inline(always)]
-    fn set_parent(&mut self, parent: *mut Node<Self::Key, Self::Value>) {
+    fn set_parent(&mut self, parent: *mut Self::Node) {
         if let Some(node) = self {
             unsafe { node.as_mut() }.set_parent(parent);
         }
     }
 
     #[inline(always)]
-    fn set_parent_and_color(&mut self, parent: *mut Node<Self::Key, Self::Value>, color: Color) {
+    fn set_parent_and_color(&mut self, parent: *mut Self::Node, color: Color) {
         if let Some(node) = self {
             unsafe { node.as_mut() }.set_parent_and_color(parent, color);
         }
     }
 
     #[inline(always)]
-    fn set_parent_color(&mut self, parent_color: ParentColor<K, V>) {
+    fn set_parent_color(&mut self, parent_color: ParentColor<Node<K, V>>) {
         if let Some(node) = self {
             unsafe { node.as_mut() }.parent_color = parent_color;
         }
     }
 
     #[inline(always)]
-    fn set_left(&mut self, left: NodePtr<Self::Key, Self::Value>) {
+    fn set_left(&mut self, left: NodePtr<Self::Node>) {
         if let Some(node) = self {
             unsafe { node.as_mut() }.left = left;
         }
     }
 
     #[inline(always)]
-    fn set_right(&mut self, right: NodePtr<Self::Key, Self::Value>) {
+    fn set_right(&mut self, right: NodePtr<Self::Node>) {
         if let Some(node) = self {
             unsafe { node.as_mut() }.right = right;
         }
     }
 }
 
-impl<K, V> From<&Node<K, V>> for NodePtr<K, V> {
+impl<K, V> From<&Node<K, V>> for NodePtr<Node<K, V>> {
     fn from(node: &Node<K, V>) -> Self {
         Some(NonNull::from(node))
     }
 }
 
-impl<K, V> From<&mut Node<K, V>> for NodePtr<K, V> {
+impl<K, V> From<&mut Node<K, V>> for NodePtr<Node<K, V>> {
     fn from(node: &mut Node<K, V>) -> Self {
         Some(NonNull::from(node))
     }
@@ -289,11 +285,11 @@ impl<K, V> From<&mut Node<K, V>> for NodePtr<K, V> {
 #[derive(Clone, Copy, PartialEq)]
 pub struct Node<K, V> {
     /// The parent pointer with color information in the lowest bit
-    pub(crate) parent_color: ParentColor<K, V>,
+    pub(crate) parent_color: ParentColor<Node<K, V>>,
     /// Right Child
-    pub right: NodePtr<K, V>,
+    pub right: NodePtr<Node<K, V>>,
     /// Left Child
-    pub left: NodePtr<K, V>,
+    pub left: NodePtr<Node<K, V>>,
     /// Key
     pub key: K,
     /// Value
@@ -366,7 +362,7 @@ impl<K, V> TreeCallbacks for Noop<K, V> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Root<K, V, C> {
     pub callbacks: C,
-    pub node: NodePtr<K, V>,
+    pub node: NodePtr<Node<K, V>>,
 }
 
 pub struct Tree<K, V, C> {
@@ -375,7 +371,7 @@ pub struct Tree<K, V, C> {
 }
 
 pub struct CachedTree<K, V, C> {
-    leftmost: NodePtr<K, V>,
+    leftmost: NodePtr<Node<K, V>>,
     len: usize,
     root: Root<K, V, C>,
 }

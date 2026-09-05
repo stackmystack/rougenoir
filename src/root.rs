@@ -25,7 +25,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
     }
 
     pub fn insert(&mut self, node: NonNull<Node<K, V>>) {
-        let mut node: NodePtr<K, V> = node.into();
+        let mut node: NodePtr<Node<K, V>> = node.into();
         let mut parent = node.red_parent();
         let mut gparent;
         let mut tmp;
@@ -231,7 +231,7 @@ where
 }
 
 impl<K, V, C> Root<K, V, C> {
-    pub fn first(&self) -> NodePtr<K, V> {
+    pub fn first(&self) -> NodePtr<Node<K, V>> {
         let mut n = self.node?;
         // SAFETY: by construction, n can never be null.
         while let Some(left) = unsafe { n.as_ref() }.left {
@@ -240,13 +240,13 @@ impl<K, V, C> Root<K, V, C> {
         Some(n)
     }
 
-    pub fn first_postorder(&self) -> NodePtr<K, V> {
+    pub fn first_postorder(&self) -> NodePtr<Node<K, V>> {
         let n = self.node?;
         // SAFETY: by construction, n is always valid.
         Some(unsafe { n.as_ref() }.left_deepest_node())
     }
 
-    pub fn last(&self) -> NodePtr<K, V> {
+    pub fn last(&self) -> NodePtr<Node<K, V>> {
         let mut n = self.node?;
         // SAFETY: by if guard, via op ?, n is never null.
         while let Some(right) = unsafe { n.as_ref() }.right {
@@ -271,7 +271,7 @@ impl<K, V, C> Root<K, V, C> {
 
 impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
     #[inline]
-    fn erase_augmented(&mut self, node: &mut Node<K, V>) -> NodePtr<K, V> {
+    fn erase_augmented(&mut self, node: &mut Node<K, V>) -> NodePtr<Node<K, V>> {
         let mut child = node.right;
         let mut tmp = node.left;
         let mut parent;
@@ -377,7 +377,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
     /// Inline version for rb_erase() use - we want to be able to inline
     /// and eliminate the [`DummyAugmenter::rotate`] callback there
     #[inline]
-    fn erase_color(&mut self, mut parent: NodePtr<K, V>) {
+    fn erase_color(&mut self, mut parent: NodePtr<Node<K, V>>) {
         let mut node = None;
         let mut sibling;
         let mut tmp1;
@@ -556,8 +556,8 @@ impl<K, V, C> Root<K, V, C> {
     fn change_child(
         &mut self,
         old: NonNull<Node<K, V>>,
-        new: NodePtr<K, V>,
-        parent: NodePtr<K, V>,
+        new: NodePtr<Node<K, V>>,
+        parent: NodePtr<Node<K, V>>,
     ) {
         if let Some(mut parent) = parent {
             // SAFETY: by if guard, parent is never null.
@@ -576,7 +576,12 @@ impl<K, V, C> Root<K, V, C> {
     /// - old's parent and color get assigned to new
     /// - old gets assigned new as a parent and 'color' as a color.
     #[inline]
-    fn rotate_set_parents(&mut self, old: NodePtr<K, V>, new: NodePtr<K, V>, color: Color) {
+    fn rotate_set_parents(
+        &mut self,
+        old: NodePtr<Node<K, V>>,
+        new: NodePtr<Node<K, V>>,
+        color: Color,
+    ) {
         if let Some(mut old) = old {
             let old = unsafe { old.as_mut() };
             let parent = old.parent();

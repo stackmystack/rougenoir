@@ -67,7 +67,7 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub fn next(&self) -> NodePtr<K, V> {
+    pub fn next(&self) -> NodePtr<Node<K, V>> {
         // If we have a right-hand child, go down and then left as far as we
         // can.
         if let Some(mut current) = self.right {
@@ -110,12 +110,12 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline(always)]
-    pub fn parent(&self) -> NodePtr<K, V> {
+    pub fn parent(&self) -> NodePtr<Node<K, V>> {
         NonNull::new(self.parent_color.parent())
     }
 
     #[inline(always)]
-    pub fn prev(&self) -> NodePtr<K, V> {
+    pub fn prev(&self) -> NodePtr<Node<K, V>> {
         // If we have a left-hand child, go down and then right as far as we
         // can.
         if let Some(mut current) = self.left {
@@ -159,7 +159,7 @@ impl<K, V> Node<K, V> {
 
     /// This is technically [`Self::parent()`] but doesn't reset the color bit.
     #[inline(always)]
-    pub fn red_parent(&self) -> NodePtr<K, V> {
+    pub fn red_parent(&self) -> NodePtr<Node<K, V>> {
         NonNull::new(self.parent_color.raw())
     }
 
@@ -180,7 +180,7 @@ impl<K, V> Node<K, V> {
 
     #[allow(dead_code)]
     #[inline(always)]
-    pub fn next_postorder(&self) -> NodePtr<K, V> {
+    pub fn next_postorder(&self) -> NodePtr<Node<K, V>> {
         // SAFETY: by if guard, via op ?, parent is never None.
         let parent = unsafe { self.parent()?.as_ref() };
         if let (Some(left), Some(right)) = (parent.left, parent.right) {

@@ -270,7 +270,7 @@ impl<K, V, C> Tree<K, V, C> {
     /// # Returns
     ///
     /// `Some(node)` if the key is in the tree, else `None`.
-    fn find_node<Q>(&self, key: &Q) -> NodePtr<K, V>
+    fn find_node<Q>(&self, key: &Q) -> NodePtr<Node<K, V>>
     where
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,
@@ -323,7 +323,7 @@ impl<K, V, C> Tree<K, V, C> {
     /// assert_eq!(direction, Some(Right));
     /// ```
     #[allow(dead_code)]
-    pub fn find_node_and_branch<Q>(&self, key: &Q) -> (NodePtr<K, V>, Option<ComingFrom>)
+    pub fn find_node_and_branch<Q>(&self, key: &Q) -> (NodePtr<Node<K, V>>, Option<ComingFrom>)
     where
         K: Borrow<Q> + Ord,
         Q: Ord + ?Sized,

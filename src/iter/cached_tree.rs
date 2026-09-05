@@ -266,8 +266,8 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> ExactSizeIterator for IntoIter<
 impl<K, V, C: TreeCallbacks<Key = K, Value = V>> FusedIterator for IntoIter<K, V, C> {}
 
 pub struct Iter<'a, K, V> {
-    first: NodePtr<K, V>,
-    last: NodePtr<K, V>,
+    first: NodePtr<Node<K, V>>,
+    last: NodePtr<Node<K, V>>,
     len: usize,
     phantom: PhantomData<(&'a K, &'a V)>,
 }
@@ -347,8 +347,8 @@ impl<K, V> Clone for Iter<'_, K, V> {
 }
 
 pub struct IterMut<'a, K, V> {
-    first: NodePtr<K, V>,
-    last: NodePtr<K, V>,
+    first: NodePtr<Node<K, V>>,
+    last: NodePtr<Node<K, V>>,
     len: usize,
     phantom: PhantomData<(&'a K, &'a V)>,
 }
