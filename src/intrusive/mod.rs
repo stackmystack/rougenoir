@@ -16,3 +16,6 @@ pub use adapter::Adapter;
 pub use callbacks::{Noop, TreeCallbacks};
 pub use link::Link;
 pub use root::Root;
+#[cfg(debug_assertions)]
+pub(crate) use root::validate_of;
+pub(crate) use root::{first_of, last_of};

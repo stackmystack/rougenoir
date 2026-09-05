@@ -1,46 +1,58 @@
 // From the Linux Kernel's core API docs:
 // https://github.com/torvalds/linux/blob/master/Documentation/core-api/rbtree.rst
-use std::{cmp::Ordering::*, marker::PhantomData};
+//
+// Unlike the kernel's own interval tree recipe, this builds on rougenoir's
+// *intrusive* API (`rougenoir::intrusive`): `IntervalNode` embeds a `Link`
+// directly, owns its own allocation (leaked via `Box`, freed by hand in
+// `Drop`), and the tree never sees a `Node<K, V>` wrapper at all.
+use std::{marker::PhantomData, ptr::NonNull};
 
-use rougenoir::{ComingFrom, Node, NodePtrExt, Root, TreeCallbacks};
+use rougenoir::{
+    Color, ComingFrom, NodePtr,
+    intrusive::{Adapter, Link, Root, TreeCallbacks},
+};
 
+/// The interval `[from, to]` a caller inserts. `IntervalNode` below is the
+/// struct actually embedded in the tree; this is just a convenient input
+/// type for [`IntervalTree::insert`].
 #[derive(Debug, Clone, Copy)]
-struct Interval<T>
-where
-    T: Ord,
-{
+struct Interval<T> {
     from: T,
     to: T,
-    subtree_to: T,
 }
 
-impl<T> Eq for Interval<T> where T: Ord + Eq {}
-impl<T> Ord for Interval<T>
-where
-    T: Ord,
-{
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.from
-            .cmp(&other.from)
-            .then_with(|| self.to.cmp(&other.to))
+impl<T> From<(T, T)> for Interval<T> {
+    fn from(value: (T, T)) -> Self {
+        Self {
+            from: value.0,
+            to: value.1,
+        }
     }
 }
 
-impl<T> PartialOrd for Interval<T>
-where
-    T: Ord + PartialOrd,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
+/// A node of the interval tree: an embedded [`Link`], the interval itself,
+/// the augmented `subtree_to` (the maximum `to` in this node's subtree,
+/// including itself), and the caller's value.
+struct IntervalNode<K, V> {
+    link: Link,
+    from: K,
+    to: K,
+    subtree_to: K,
+    value: V,
 }
 
-impl<T> PartialEq for Interval<T>
-where
-    T: Ord + PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.from == other.from && self.to == other.to
+// `intrusive_adapter!` only handles non-generic values (see its docs), so
+// `IntervalNode<K, V>` needs its `Adapter` written by hand — the same shape
+// `crate::NodeAdapter<K, V>` uses internally for `Tree`/`CachedTree`.
+struct IntervalNodeAdapter<K, V>(PhantomData<(K, V)>);
+
+// SAFETY: `link` is genuinely a field of type `Link` on `IntervalNode<K, V>`,
+// so `offset_of!` gives its exact byte offset.
+unsafe impl<K, V> Adapter for IntervalNodeAdapter<K, V> {
+    type Value = IntervalNode<K, V>;
+
+    fn link_offset() -> usize {
+        std::mem::offset_of!(IntervalNode<K, V>, link)
     }
 }
 
@@ -52,17 +64,24 @@ impl<K, V> IntervalTreeCallbacks<K, V>
 where
     K: Ord + Copy,
 {
-    fn compute_rubtree_last(node: &Node<Interval<K>, V>) -> K {
-        let mut max = node.key.to;
-        let mut subtree_to;
-        if node.left.is_some() {
-            subtree_to = node.key.subtree_to;
+    /// The augmented value for `node`: the largest `to` reachable from it,
+    /// i.e. `max(node.to, left.subtree_to, right.subtree_to)`.
+    fn compute_subtree_max(node: NonNull<IntervalNode<K, V>>) -> K {
+        // SAFETY: node points at a live IntervalNode.
+        let mut max = unsafe { node.as_ref() }.to;
+        // SAFETY: node points at a live IntervalNode belonging to a tree
+        // built through IntervalNodeAdapter.
+        if let Some(left) = unsafe { IntervalNodeAdapter::<K, V>::left(node) } {
+            // SAFETY: see above.
+            let subtree_to = unsafe { left.as_ref() }.subtree_to;
             if max < subtree_to {
                 max = subtree_to;
             }
         }
-        if node.right.is_some() {
-            subtree_to = node.key.subtree_to;
+        // SAFETY: see above.
+        if let Some(right) = unsafe { IntervalNodeAdapter::<K, V>::right(node) } {
+            // SAFETY: see above.
+            let subtree_to = unsafe { right.as_ref() }.subtree_to;
             if max < subtree_to {
                 max = subtree_to;
             }
@@ -75,52 +94,39 @@ impl<K, V> TreeCallbacks for IntervalTreeCallbacks<K, V>
 where
     K: Ord + Copy,
 {
-    type Key = Interval<K>;
-    type Value = V;
+    type Value = IntervalNode<K, V>;
 
-    fn copy(&self, old: &mut Node<Self::Key, Self::Value>, new: &mut Node<Self::Key, Self::Value>) {
-        new.key.subtree_to = old.key.subtree_to;
+    fn copy(&self, old: NonNull<Self::Value>, mut new: NonNull<Self::Value>) {
+        // SAFETY: old/new point at live IntervalNodes.
+        unsafe { new.as_mut() }.subtree_to = unsafe { old.as_ref() }.subtree_to;
     }
 
-    fn propagate(
-        &self,
-        node: Option<&mut Node<Self::Key, Self::Value>>,
-        stop: Option<&mut Node<Self::Key, Self::Value>>,
-    ) {
-        if let Some(start_node) = node {
-            let mut current: *mut Node<Self::Key, Self::Value> = start_node;
-            let stop_ptr = stop.map_or(std::ptr::null(), |s| s as *const _);
-
-            while !std::ptr::eq(current, stop_ptr) {
-                let current_ref = unsafe { &*current };
-                let current_mut = unsafe { &mut *current };
-
-                let subtree_to = IntervalTreeCallbacks::compute_rubtree_last(current_ref);
-
-                if current_ref.key.subtree_to == subtree_to {
-                    break;
-                }
-
-                current_mut.key.subtree_to = subtree_to;
-
-                // Move to parent
-                let parent_opt = current_ref.parent();
-                if let Some(parent_ptr) = parent_opt {
-                    current = parent_ptr.as_ptr();
-                } else {
-                    break;
-                }
+    fn propagate(&self, node: Option<NonNull<Self::Value>>, stop: Option<NonNull<Self::Value>>) {
+        let mut current = node;
+        while current != stop {
+            let Some(mut current_ptr) = current else {
+                break;
+            };
+            let subtree_to = Self::compute_subtree_max(current_ptr);
+            // SAFETY: current_ptr points at a live IntervalNode that
+            // nothing else touches for the duration of this call.
+            let current_ref = unsafe { current_ptr.as_mut() };
+            if current_ref.subtree_to == subtree_to {
+                break;
             }
+            current_ref.subtree_to = subtree_to;
+            // SAFETY: current_ptr points at a live IntervalNode belonging
+            // to a tree built through IntervalNodeAdapter.
+            current = unsafe { IntervalNodeAdapter::<K, V>::parent(current_ptr) };
         }
     }
 
-    fn rotate(
-        &self,
-        old: &mut Node<Self::Key, Self::Value>,
-        new: &mut Node<Self::Key, Self::Value>,
-    ) {
-        new.key.subtree_to = old.key.subtree_to;
-        old.key.subtree_to = IntervalTreeCallbacks::compute_rubtree_last(old);
+    fn rotate(&self, mut old: NonNull<Self::Value>, mut new: NonNull<Self::Value>) {
+        // SAFETY: old/new point at live IntervalNodes.
+        unsafe {
+            new.as_mut().subtree_to = old.as_ref().subtree_to;
+            old.as_mut().subtree_to = Self::compute_subtree_max(old);
+        }
     }
 }
 
@@ -128,7 +134,7 @@ struct IntervalTree<K, V>
 where
     K: Ord,
 {
-    root: Root<Interval<K>, V, IntervalTreeCallbacks<K, V>>,
+    root: Root<IntervalNodeAdapter<K, V>, IntervalTreeCallbacks<K, V>>,
     len: usize,
 }
 
@@ -138,82 +144,105 @@ where
 {
     pub fn new() -> Self {
         IntervalTree {
-            root: Root {
-                callbacks: IntervalTreeCallbacks {
-                    phantom: PhantomData,
-                },
-                node: None,
-            },
+            root: Root::new(IntervalTreeCallbacks {
+                phantom: PhantomData,
+            }),
             len: 0,
         }
     }
 
-    // ⚠️ marks a comment on the difference with the implementation of insert in Tree.
     pub fn insert<Q>(&mut self, key: Q, value: V) -> Option<V>
     where
-        K: Ord + Copy,
         Q: Into<Interval<K>>,
     {
+        let interval: Interval<K> = key.into();
+        let to = interval.to;
+
         match self.root.node {
             None => {
                 // SAFETY: root doesn't exist, so we create a new one.
-                self.root.node = unsafe { Node::<Interval<K>, V>::leak(key.into(), value) }; // ⚠️ coerce type
+                let node_ptr = NonNull::from(Box::leak(Box::new(IntervalNode {
+                    link: Link::new(),
+                    from: interval.from,
+                    to: interval.to,
+                    subtree_to: to,
+                    value,
+                })));
+                // SAFETY: node_ptr is freshly leaked and not yet part of
+                // any tree; a lone root must be black.
+                unsafe { IntervalNodeAdapter::<K, V>::set_color(node_ptr, Color::Black) };
+                // SAFETY: node_ptr embeds a live Link.
+                self.root.node = Some(unsafe { IntervalNodeAdapter::<K, V>::get_link(node_ptr) });
                 self.len += 1;
                 None
             }
-            Some(_) => {
-                let to = unsafe { self.root.node.unwrap().as_ref() }.key.to;
-
+            Some(root_link) => {
                 // [1] replace an existing value or ([2] prepare for linking and [3] link).
-                let mut current_node = self.root.node.ptr();
-                let mut parent = current_node;
+                // SAFETY: root_link embeds a live IntervalNode.
+                let mut current =
+                    Some(unsafe { IntervalNodeAdapter::<K, V>::get_value(root_link) });
+                let mut parent = current.expect("tree is non-empty by the match guard above");
                 let mut direction = ComingFrom::Left; // We don't really care, but rust does.
 
-                let key: Interval<K> = key.into(); // ⚠️ add
-                while !current_node.is_null() {
-                    parent = current_node; // [4] parent is never null by construction.
+                while let Some(mut candidate) = current {
+                    parent = candidate; // [4] parent is never null by construction.
                     #[allow(unused_variables)]
                     let parent = parent; // [4] by sealing, parent is never null hereafter.
 
-                    // SAFETY: guaranteed not null by the while guard.
-                    let current_ref = unsafe { current_node.as_mut().unwrap() };
-                    // ⚠️ begin::add
-                    if current_ref.key.subtree_to < to {
-                        current_ref.key.subtree_to = to;
+                    // SAFETY: candidate points at a live IntervalNode.
+                    let candidate_ref = unsafe { candidate.as_mut() };
+                    if candidate_ref.subtree_to < to {
+                        candidate_ref.subtree_to = to;
                     }
-                    // ⚠️ end::add
 
-                    match key.cmp(&current_ref.key) {
-                        Equal => {
+                    current = match interval
+                        .from
+                        .cmp(&candidate_ref.from)
+                        .then_with(|| interval.to.cmp(&candidate_ref.to))
+                    {
+                        std::cmp::Ordering::Equal => {
                             // [1] replace an existing value.
-                            return Some(std::mem::replace(&mut current_ref.value, value));
+                            return Some(std::mem::replace(&mut candidate_ref.value, value));
                         }
-                        Greater => {
+                        std::cmp::Ordering::Greater => {
                             // [2] prepare for linking on the right of parent.
                             direction = ComingFrom::Right;
-                            current_node = current_ref.right.ptr();
+                            // SAFETY: candidate points at a live IntervalNode.
+                            unsafe { IntervalNodeAdapter::<K, V>::right(candidate) }
                         }
-                        Less => {
+                        std::cmp::Ordering::Less => {
                             // [2] prepare for linking on the left of parent.
                             direction = ComingFrom::Left;
-                            current_node = current_ref.left.ptr();
+                            // SAFETY: candidate points at a live IntervalNode.
+                            unsafe { IntervalNodeAdapter::<K, V>::left(candidate) }
                         }
                     };
                 }
                 #[allow(unused_variables)]
-                let current_node = current_node;
                 let direction = direction;
                 let parent = parent; // [4] by sealing, parent is never null hereafter.
 
                 // [3] link.
 
                 // SAFETY: we're owning (k,v)
-                let mut node = unsafe { Node::<Interval<K>, V>::leak(key, value) }; // ⚠️ coerce type
-                unsafe { node.unwrap_unchecked().as_mut() }.key.subtree_to = to; // ⚠️ add
-                // SAFETY: [4] parent is never null by construction.
-                unsafe { node.link(parent, direction) };
-                // SAFETY: node is definitely non null at this stage.
-                self.root.insert(unsafe { node.unwrap_unchecked() });
+                let node_ptr = NonNull::from(Box::leak(Box::new(IntervalNode {
+                    link: Link::new(),
+                    from: interval.from,
+                    to: interval.to,
+                    subtree_to: to,
+                    value,
+                })));
+                // SAFETY: node_ptr is freshly leaked and unlinked; parent
+                // is a live IntervalNode belonging to this tree.
+                unsafe {
+                    Link::link(
+                        IntervalNodeAdapter::<K, V>::get_link(node_ptr),
+                        IntervalNodeAdapter::<K, V>::get_link(parent),
+                        direction,
+                    );
+                    self.root
+                        .insert(IntervalNodeAdapter::<K, V>::get_link(node_ptr));
+                }
                 self.len += 1;
                 None
             }
@@ -226,23 +255,46 @@ where
     K: Ord,
 {
     fn drop(&mut self) {
-        // SAFETY: we're literally in drop.
-        unsafe {
-            Root::dealloc(&mut self.root, self.len);
-        }
+        // SAFETY: every node in this tree was leaked via Box::leak in
+        // `insert`, and this tree owns them exclusively.
+        unsafe { free_subtree::<K, V>(self.root.node) };
     }
 }
 
-impl<T> From<(T, T)> for Interval<T>
-where
-    T: Ord + Clone,
-{
-    fn from(value: (T, T)) -> Self {
-        Self {
-            from: value.0.clone(),
-            to: value.1,
-            subtree_to: value.0,
-        }
+/// Frees every node reachable from `link`.
+///
+/// The intrusive API never owns allocation (mirroring the kernel's
+/// `struct rb_node`), so unlike `Tree`/`CachedTree` there is no built-in
+/// teardown to call here — the tree's own `Drop` impl has to walk and free
+/// its nodes by hand, exactly as a kernel user of an intrusive rbtree would.
+///
+/// # Safety
+///
+/// Every link reachable from `link` must point at a live `IntervalNode<K, V>`
+/// originally produced by `Box::leak`, and none of them may be touched again
+/// after this call.
+unsafe fn free_subtree<K, V>(link: NodePtr<Link>) {
+    let Some(link) = link else {
+        return;
+    };
+    // SAFETY: delegated to the caller.
+    let node = unsafe { IntervalNodeAdapter::<K, V>::get_value(link) };
+    // SAFETY: node points at a live IntervalNode belonging to this tree.
+    let left = unsafe { IntervalNodeAdapter::<K, V>::left(node) };
+    // SAFETY: see above.
+    let right = unsafe { IntervalNodeAdapter::<K, V>::right(node) };
+    // SAFETY: node was produced by Box::leak in `insert`, and this is the
+    // only remaining reference to it.
+    drop(unsafe { Box::from_raw(node.as_ptr()) });
+
+    // SAFETY: left/right, if any, point at live IntervalNodes.
+    let left_link = left.map(|l| unsafe { IntervalNodeAdapter::<K, V>::get_link(l) });
+    // SAFETY: see above.
+    let right_link = right.map(|r| unsafe { IntervalNodeAdapter::<K, V>::get_link(r) });
+    // SAFETY: delegated to the caller (transitively, for these subtrees).
+    unsafe {
+        free_subtree::<K, V>(left_link);
+        free_subtree::<K, V>(right_link);
     }
 }
 

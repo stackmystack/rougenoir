@@ -108,16 +108,16 @@ mod test {
     // The color doesn't matter for iterator tests, so we use them to mark direction.
     macro_rules! link {
         ($parent:expr, $child:expr, left) => {
-            $parent.left = $child.into();
+            $parent.set_left($child.into());
             $child.set_parent_and_color($parent, Color::Red);
         };
         ($parent:expr, $child:expr, right) => {
-            $parent.right = $child.into();
+            $parent.set_right($child.into());
             $child.set_parent_and_color($parent, Color::Black);
         };
         ($parent:expr, $left:expr, $right:expr) => {
-            $parent.left = $left.into();
-            $parent.right = $right.into();
+            $parent.set_left($left.into());
+            $parent.set_right($right.into());
             $left.set_parent_and_color($parent, Color::Red);
             $right.set_parent_and_color($parent, Color::Black);
         };

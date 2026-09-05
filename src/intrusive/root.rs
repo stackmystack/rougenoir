@@ -180,52 +180,76 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
     }
 }
 
+/// Returns the leftmost (in-order first) link reachable from `node`.
+///
+/// Free function (rather than a `Root` method) so [`crate::Root`] can reuse
+/// this exact traversal without needing to construct a whole intrusive
+/// [`Root`] (which would require a [`TreeCallbacks`] value it has no use
+/// for here).
+pub(crate) fn first_of(node: NodePtr<Link>) -> NodePtr<Link> {
+    let mut n = node?;
+    // n can never be null here, by construction.
+    while let Some(left) = Some(n).left() {
+        n = left;
+    }
+    Some(n)
+}
+
+/// Returns the rightmost (in-order last) link reachable from `node`. See
+/// [`first_of`].
+pub(crate) fn last_of(node: NodePtr<Link>) -> NodePtr<Link> {
+    let mut n = node?;
+    // n is never null here, via the `?` above.
+    while let Some(right) = Some(n).right() {
+        n = right;
+    }
+    Some(n)
+}
+
+/// Checks the structural red-black invariant (every child's `parent()`
+/// points back at its actual parent) starting from `node`. See
+/// [`first_of`].
+#[cfg(debug_assertions)]
+#[allow(useless_ptr_null_checks)]
+pub(crate) fn validate_of(node: NodePtr<Link>) -> bool {
+    let mut current = first_of(node);
+    let mut res = true;
+    while let Some(c) = current {
+        if c.as_ptr().is_null() {
+            res = false;
+            break;
+        }
+        let left = Some(c).left();
+        let right = Some(c).right();
+        if left.is_some() && left.parent() != current {
+            res = false;
+        }
+        if right.is_some() && right.parent() != current {
+            res = false;
+        }
+        if !res {
+            return false;
+        }
+        current = Some(c).next_node();
+    }
+
+    res
+}
+
 #[cfg(debug_assertions)]
 impl<A: Adapter, C> Root<A, C> {
-    #[allow(useless_ptr_null_checks)]
     pub fn validate(&self) -> bool {
-        let mut current = self.first();
-        let mut res = true;
-        while let Some(c) = current {
-            if c.as_ptr().is_null() {
-                res = false;
-                break;
-            }
-            let left = Some(c).left();
-            let right = Some(c).right();
-            if left.is_some() && left.parent() != current {
-                res = false;
-            }
-            if right.is_some() && right.parent() != current {
-                res = false;
-            }
-            if !res {
-                return false;
-            }
-            current = Some(c).next_node();
-        }
-
-        res
+        validate_of(self.node)
     }
 }
 
 impl<A: Adapter, C> Root<A, C> {
     pub fn first(&self) -> NodePtr<Link> {
-        let mut n = self.node?;
-        // n can never be null here, by construction.
-        while let Some(left) = Some(n).left() {
-            n = left;
-        }
-        Some(n)
+        first_of(self.node)
     }
 
     pub fn last(&self) -> NodePtr<Link> {
-        let mut n = self.node?;
-        // n is never null here, via the `?` above.
-        while let Some(right) = Some(n).right() {
-            n = right;
-        }
-        Some(n)
+        last_of(self.node)
     }
 }
 
@@ -236,9 +260,8 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
     #[inline(always)]
     fn value(link: NodePtr<Link>) -> NonNull<A::Value> {
         // SAFETY: every link ever stored in this tree was produced by
-        // `A::get_link` from a live `A::Value`; the `.expect` mirrors
-        // `NodePtrImplExt::mut_ref`'s implicit unwrap; callers only reach
-        // here where the algorithm has already established `link` is Some.
+        // `A::get_link` from a live `A::Value`; callers only reach here
+        // where the algorithm has already established `link` is Some.
         unsafe { A::get_value(link.expect("link pointer should be valid")) }
     }
 

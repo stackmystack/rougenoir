@@ -1,6 +1,7 @@
 use std::ptr::NonNull;
 
 use super::Link;
+use crate::Color;
 
 /// Bridges a [`Link`] embedded inside a `Value` back to the containing
 /// `Value`; the same job the Linux kernel's `container_of()` macro does for
@@ -48,6 +49,85 @@ pub unsafe trait Adapter {
         // bytes into a live `Self::Value`, so subtracting that offset
         // recovers the value's address.
         unsafe { NonNull::new_unchecked(link.as_ptr().byte_sub(Self::link_offset())).cast() }
+    }
+
+    // --- Tree navigation, at the `Value` level. ---
+    //
+    // These mirror `Node<K, V>`'s own `left()`/`right()`/`parent()`/etc.,
+    // giving intrusive trees the same ergonomics without exposing `Link`'s
+    // own (crate-internal) pointer-chasing primitives.
+
+    /// `value`'s left child, if any.
+    ///
+    /// # Safety
+    ///
+    /// `value` must point at a live `Self::Value` that is (or, until this
+    /// call returns, was) linked into a tree via this `Adapter`.
+    #[inline]
+    unsafe fn left(value: NonNull<Self::Value>) -> Option<NonNull<Self::Value>> {
+        // SAFETY: delegated to the caller.
+        unsafe { Link::left(Self::get_link(value)) }.map(|l| unsafe { Self::get_value(l) })
+    }
+
+    /// `value`'s right child, if any.
+    ///
+    /// # Safety
+    ///
+    /// Same contract as [`Adapter::left`].
+    #[inline]
+    unsafe fn right(value: NonNull<Self::Value>) -> Option<NonNull<Self::Value>> {
+        // SAFETY: delegated to the caller.
+        unsafe { Link::right(Self::get_link(value)) }.map(|l| unsafe { Self::get_value(l) })
+    }
+
+    /// `value`'s parent, if any (`None` at the root).
+    ///
+    /// # Safety
+    ///
+    /// Same contract as [`Adapter::left`].
+    #[inline]
+    unsafe fn parent(value: NonNull<Self::Value>) -> Option<NonNull<Self::Value>> {
+        // SAFETY: delegated to the caller.
+        unsafe { Link::parent(Self::get_link(value)) }.map(|l| unsafe { Self::get_value(l) })
+    }
+
+    /// `value`'s in-order successor, if any.
+    ///
+    /// # Safety
+    ///
+    /// Same contract as [`Adapter::left`].
+    #[inline]
+    unsafe fn next(value: NonNull<Self::Value>) -> Option<NonNull<Self::Value>> {
+        // SAFETY: delegated to the caller.
+        unsafe { Link::next(Self::get_link(value)) }.map(|l| unsafe { Self::get_value(l) })
+    }
+
+    /// `value`'s in-order predecessor, if any.
+    ///
+    /// # Safety
+    ///
+    /// Same contract as [`Adapter::left`].
+    #[inline]
+    unsafe fn prev(value: NonNull<Self::Value>) -> Option<NonNull<Self::Value>> {
+        // SAFETY: delegated to the caller.
+        unsafe { Link::prev(Self::get_link(value)) }.map(|l| unsafe { Self::get_value(l) })
+    }
+
+    /// Sets `value`'s color directly, without rebalancing.
+    ///
+    /// The one case a correct caller needs this for: the very first node
+    /// inserted into an empty tree has no rebalancing to do, but still must
+    /// be colored black (mirroring [`crate::Node`]'s own containers, which
+    /// color a freshly leaked root black before ever calling
+    /// [`crate::Root::insert`]).
+    ///
+    /// # Safety
+    ///
+    /// `value` must point at a live `Self::Value`.
+    #[inline]
+    unsafe fn set_color(value: NonNull<Self::Value>, color: Color) {
+        // SAFETY: delegated to the caller.
+        unsafe { Link::set_color(Self::get_link(value), color) }
     }
 }
 

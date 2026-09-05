@@ -86,12 +86,12 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                         Greater => {
                             // [2] prepare for linking on the right of parent.
                             direction = ComingFrom::Right;
-                            current_node = current_ref.right.ptr();
+                            current_node = current_ref.right().ptr();
                         }
                         Less => {
                             // [2] prepare for linking on the left of parent.
                             direction = ComingFrom::Left;
-                            current_node = current_ref.left.ptr();
+                            current_node = current_ref.left().ptr();
                         }
                     };
                 }
@@ -225,8 +225,8 @@ where
         // SAFETY: node is non-null by the above check
         {
             let node_ref = unsafe { node.as_mut() };
-            node_ref.parent_color = ParentColor::new(parent, Color::Red);
-            node_ref.left = left_subtree;
+            node_ref.set_parent_color(ParentColor::new(parent, Color::Red));
+            node_ref.set_left(left_subtree);
             // Set left child's parent
             if let Some(mut left) = left_subtree {
                 unsafe { left.as_mut() }.set_parent(node.as_ptr());
@@ -238,7 +238,7 @@ where
         // Build right subtree
         let right_count = count - left_count - 1;
         let right_subtree = Self::build_recursive(iter, right_count, node.as_ptr());
-        unsafe { node.as_mut() }.right = right_subtree;
+        unsafe { node.as_mut() }.set_right(right_subtree);
         // Set right child's parent
         if let Some(mut right) = right_subtree {
             unsafe { right.as_mut() }.set_parent(node.as_ptr());
@@ -276,8 +276,8 @@ impl<K, V, C> CachedTree<K, V, C> {
             let candidate = unsafe { candidate.as_ref() };
             match key.cmp(candidate.key.borrow()) {
                 Equal => break,
-                Greater => node = candidate.right,
-                Less => node = candidate.left,
+                Greater => node = candidate.right(),
+                Less => node = candidate.left(),
             }
         }
         node

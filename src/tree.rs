@@ -116,12 +116,12 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                         Greater => {
                             // [2] prepare for linking on the right of parent.
                             direction = ComingFrom::Right;
-                            current_node = current_ref.right.ptr();
+                            current_node = current_ref.right().ptr();
                         }
                         Less => {
                             // [2] prepare for linking on the left of parent.
                             direction = ComingFrom::Left;
-                            current_node = current_ref.left.ptr();
+                            current_node = current_ref.left().ptr();
                         }
                     };
                 }
@@ -281,8 +281,8 @@ impl<K, V, C> Tree<K, V, C> {
             let candidate = unsafe { candidate.as_ref() };
             match key.cmp(candidate.key.borrow()) {
                 Equal => break,
-                Greater => node = candidate.right,
-                Less => node = candidate.left,
+                Greater => node = candidate.right(),
+                Less => node = candidate.left(),
             }
         }
         node
@@ -337,11 +337,11 @@ impl<K, V, C> Tree<K, V, C> {
                 Equal => break,
                 Greater => {
                     direction = Some(ComingFrom::Right);
-                    node = candidate.right;
+                    node = candidate.right();
                 }
                 Less => {
                     direction = Some(ComingFrom::Left);
-                    node = candidate.left;
+                    node = candidate.left();
                 }
             }
         }
@@ -663,21 +663,21 @@ where
         // SAFETY: new_node is non-null
         {
             let new_node_ref = unsafe { new_node.as_mut() };
-            new_node_ref.parent_color = ParentColor::new(parent, node_ref.color());
+            new_node_ref.set_parent_color(ParentColor::new(parent, node_ref.color()));
             // Color is already set via ParentColor::new above
 
             // Recursively clone left subtree
-            if let Some(left) = node_ref.left
+            if let Some(left) = node_ref.left()
                 && let Some(cloned_left) = Self::clone_node_recursive(left, new_node.as_ptr())
             {
-                new_node_ref.left = Some(cloned_left);
+                new_node_ref.set_left(Some(cloned_left));
             }
 
             // Recursively clone right subtree
-            if let Some(right) = node_ref.right
+            if let Some(right) = node_ref.right()
                 && let Some(cloned_right) = Self::clone_node_recursive(right, new_node.as_ptr())
             {
-                new_node_ref.right = Some(cloned_right);
+                new_node_ref.set_right(Some(cloned_right));
             }
         }
 
@@ -712,7 +712,7 @@ where
         let node_ref = unsafe { node.as_ref() };
 
         // In-order traversal: left, self, right
-        if let Some(left) = node_ref.left {
+        if let Some(left) = node_ref.left() {
             Self::extract_tree_contents_recursive(left, result);
         }
 
@@ -722,7 +722,7 @@ where
             node_ref.color(),
         ));
 
-        if let Some(right) = node_ref.right {
+        if let Some(right) = node_ref.right() {
             Self::extract_tree_contents_recursive(right, result);
         }
     }

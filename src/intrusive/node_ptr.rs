@@ -86,11 +86,6 @@ impl NodePtrImplExt for NodePtr<Link> {
     type Node = Link;
 
     #[inline(always)]
-    unsafe fn mut_ref(&mut self) -> &mut Self::Node {
-        self.map(|mut v| unsafe { v.as_mut() }).unwrap()
-    }
-
-    #[inline(always)]
     fn red_parent(&self) -> NodePtr<Self::Node> {
         // SAFETY: any Some(link) here points at a live Link.
         self.and_then(|v| unsafe { Link::red_parent(v) })

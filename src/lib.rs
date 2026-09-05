@@ -13,6 +13,8 @@ use std::{
     ptr::{self, NonNull},
 };
 
+use intrusive::{Adapter, Link};
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Color {
     Red = 0,
@@ -142,10 +144,6 @@ pub trait NodePtrExt {
 pub(crate) trait NodePtrImplExt {
     type Node;
 
-    /// # Safety
-    ///
-    /// This is an internal API. Don't use directly, and most importantly, don't drop manually.
-    unsafe fn mut_ref(&mut self) -> &mut Self::Node;
     fn red_parent(&self) -> NodePtr<Self::Node>;
     fn set_color(&mut self, color: Color);
     fn set_left(&mut self, left: NodePtr<Self::Node>);
@@ -155,6 +153,14 @@ pub(crate) trait NodePtrImplExt {
     fn set_right(&mut self, right: NodePtr<Self::Node>);
 }
 
+// Every accessor below bridges through `Node::link_ptr`/`Node::from_link`
+// (i.e. through `Link`'s own raw-pointer-based associated functions)
+// instead of touching a stored sibling pointer's target directly. This
+// mirrors `crate::intrusive::node_ptr`'s impls for `NodePtr<Link>`: a
+// pointer read back out of a sibling's `left`/`right` is a `NonNull<Link>`
+// pointing at that sibling's *embedded* `Link`, and widening it back out to
+// the sibling's whole `Node<K, V>` is exactly the `container_of()`-style
+// operation that requires staying in raw-pointer land end to end.
 impl<K, V> NodePtrExt for NodePtr<Node<K, V>> {
     type Node = Node<K, V>;
 
@@ -175,27 +181,35 @@ impl<K, V> NodePtrExt for NodePtr<Node<K, V>> {
 
     #[inline(always)]
     fn is_red(&self) -> bool {
-        self.is_some_and(|v| unsafe { v.as_ref() }.is_red())
+        // SAFETY: any Some(v) here points at a live Node<K, V>.
+        self.is_some_and(|v| unsafe { Link::is_red(Node::link_ptr(v)) })
     }
 
     #[inline(always)]
     unsafe fn link(&mut self, parent: *mut Self::Node, direction: ComingFrom) {
-        self.map(|mut v| unsafe { Node::link(v.as_mut(), parent, direction) });
+        // SAFETY: delegated to the caller.
+        self.map(|v| unsafe { Node::link(v.as_ptr(), parent, direction) });
     }
 
     #[inline(always)]
     fn next_node(&self) -> NodePtr<Self::Node> {
-        self.map(|v| unsafe { v.as_ref() }.next()).flatten()
+        // SAFETY: any Some(v) here points at a live Node<K, V>.
+        self.and_then(|v| unsafe { Link::next(Node::link_ptr(v)) })
+            .map(Node::from_link)
     }
 
     #[inline(always)]
     fn parent(&self) -> NodePtr<Self::Node> {
-        self.map_or(None, |v| unsafe { v.as_ref() }.parent())
+        // SAFETY: any Some(v) here points at a live Node<K, V>.
+        self.and_then(|v| unsafe { Link::parent(Node::link_ptr(v)) })
+            .map(Node::from_link)
     }
 
     #[inline(always)]
     fn prev_node(&self) -> NodePtr<Self::Node> {
-        self.map(|v| unsafe { v.as_ref() }.prev()).flatten()
+        // SAFETY: any Some(v) here points at a live Node<K, V>.
+        self.and_then(|v| unsafe { Link::prev(Node::link_ptr(v)) })
+            .map(Node::from_link)
     }
 
     #[inline(always)]
@@ -205,12 +219,16 @@ impl<K, V> NodePtrExt for NodePtr<Node<K, V>> {
 
     #[inline(always)]
     fn left(&self) -> NodePtr<Self::Node> {
-        self.map_or(None, |v| unsafe { v.as_ref() }.left)
+        // SAFETY: any Some(v) here points at a live Node<K, V>.
+        self.and_then(|v| unsafe { Link::left(Node::link_ptr(v)) })
+            .map(Node::from_link)
     }
 
     #[inline(always)]
     fn right(&self) -> NodePtr<Self::Node> {
-        self.map_or(None, |v| unsafe { v.as_ref() }.right)
+        // SAFETY: any Some(v) here points at a live Node<K, V>.
+        self.and_then(|v| unsafe { Link::right(Node::link_ptr(v)) })
+            .map(Node::from_link)
     }
 }
 
@@ -218,54 +236,63 @@ impl<K, V> NodePtrImplExt for NodePtr<Node<K, V>> {
     type Node = Node<K, V>;
 
     #[inline(always)]
-    unsafe fn mut_ref(&mut self) -> &mut Self::Node {
-        self.map(|mut v| unsafe { v.as_mut() }).unwrap()
-    }
-
-    #[inline(always)]
     fn red_parent(&self) -> NodePtr<Self::Node> {
-        self.map_or(None, |v| unsafe { v.as_ref().red_parent() })
+        // SAFETY: any Some(v) here points at a live Node<K, V>.
+        self.and_then(|v| unsafe { Link::red_parent(Node::link_ptr(v)) })
+            .map(Node::from_link)
     }
 
     #[inline(always)]
     fn set_color(&mut self, color: Color) {
         if let Some(node) = self {
-            unsafe { node.as_mut() }.set_color(color);
+            // SAFETY: node points at a live Node<K, V>.
+            unsafe { Link::set_color(Node::link_ptr(*node), color) };
         }
     }
 
     #[inline(always)]
     fn set_parent(&mut self, parent: *mut Self::Node) {
         if let Some(node) = self {
-            unsafe { node.as_mut() }.set_parent(parent);
+            // SAFETY: node points at a live Node<K, V>.
+            unsafe { Link::set_parent(Node::link_ptr(*node), Node::raw_link_ptr(parent)) };
         }
     }
 
     #[inline(always)]
     fn set_parent_and_color(&mut self, parent: *mut Self::Node, color: Color) {
         if let Some(node) = self {
-            unsafe { node.as_mut() }.set_parent_and_color(parent, color);
+            // SAFETY: node points at a live Node<K, V>.
+            unsafe {
+                Link::set_parent_and_color(Node::link_ptr(*node), Node::raw_link_ptr(parent), color)
+            };
         }
     }
 
     #[inline(always)]
     fn set_parent_color(&mut self, parent_color: ParentColor<Node<K, V>>) {
         if let Some(node) = self {
-            unsafe { node.as_mut() }.parent_color = parent_color;
+            let link_pc = ParentColor::new(
+                Node::raw_link_ptr(parent_color.parent()),
+                parent_color.color(),
+            );
+            // SAFETY: node points at a live Node<K, V>.
+            unsafe { Link::set_parent_color(Node::link_ptr(*node), link_pc) };
         }
     }
 
     #[inline(always)]
     fn set_left(&mut self, left: NodePtr<Self::Node>) {
         if let Some(node) = self {
-            unsafe { node.as_mut() }.left = left;
+            // SAFETY: node points at a live Node<K, V>.
+            unsafe { Link::set_left(Node::link_ptr(*node), left.map(Node::link_ptr)) };
         }
     }
 
     #[inline(always)]
     fn set_right(&mut self, right: NodePtr<Self::Node>) {
         if let Some(node) = self {
-            unsafe { node.as_mut() }.right = right;
+            // SAFETY: node points at a live Node<K, V>.
+            unsafe { Link::set_right(Node::link_ptr(*node), right.map(Node::link_ptr)) };
         }
     }
 }
@@ -283,18 +310,57 @@ impl<K, V> From<&mut Node<K, V>> for NodePtr<Node<K, V>> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, PartialEq)]
 pub struct Node<K, V> {
-    /// The parent pointer with color information in the lowest bit
-    pub(crate) parent_color: ParentColor<Node<K, V>>,
-    /// Right Child
-    pub right: NodePtr<Node<K, V>>,
-    /// Left Child
-    pub left: NodePtr<Node<K, V>>,
+    /// The link into the tree structure (parent/left/right/color).
+    pub(crate) link: Link,
     /// Key
     pub key: K,
     /// Value
     pub value: V,
+}
+
+/// Bridges a [`Node<K, V>`]'s embedded [`Link`] back to the whole `Node`.
+///
+/// This is what lets [`Root<K, V, C>`] reuse the exact same pointer-chasing
+/// primitives ([`Link`]'s raw-pointer-based associated functions) as the
+/// public [`intrusive`] API, instead of duplicating them.
+struct NodeAdapter<K, V>(PhantomData<(K, V)>);
+
+// SAFETY: `link` is genuinely a field of type `Link` on `Node<K, V>`, so
+// `offset_of!` gives its exact byte offset.
+unsafe impl<K, V> Adapter for NodeAdapter<K, V> {
+    type Value = Node<K, V>;
+
+    fn link_offset() -> usize {
+        std::mem::offset_of!(Node<K, V>, link)
+    }
+}
+
+impl<K, V> Node<K, V> {
+    /// Converts a pointer to a whole `Node<K, V>` into a pointer to its
+    /// embedded [`Link`].
+    #[inline(always)]
+    fn link_ptr(this: NonNull<Node<K, V>>) -> NonNull<Link> {
+        // SAFETY: `this` points at a live `Node<K, V>`, which genuinely
+        // embeds a `Link` at `NodeAdapter::link_offset()`.
+        unsafe { NodeAdapter::<K, V>::get_link(this) }
+    }
+
+    /// Converts a pointer to a [`Link`] embedded in some `Node<K, V>` back
+    /// to a pointer to that whole `Node<K, V>`.
+    #[inline(always)]
+    fn from_link(link: NonNull<Link>) -> NonNull<Node<K, V>> {
+        // SAFETY: every `Link` reachable from a `Node<K, V>` tree was
+        // produced by `link_ptr` from a live `Node<K, V>`.
+        unsafe { NodeAdapter::<K, V>::get_value(link) }
+    }
+
+    /// Like [`Node::link_ptr`], but tolerates (and preserves) a null
+    /// pointer, mirroring how a null `*mut Node<K, V>` means "no parent".
+    #[inline(always)]
+    fn raw_link_ptr(this: *mut Node<K, V>) -> *mut Link {
+        NonNull::new(this).map_or(ptr::null_mut(), |n| Node::link_ptr(n).as_ptr())
+    }
 }
 
 pub trait TreeCallbacks {
@@ -414,13 +480,13 @@ impl<K, V, C> Root<K, V, C> {
         direction.reserve(log_val.saturating_mul(2).max(4096));
         while let Some(mut current) = parent {
             let current_ref = unsafe { current.as_ref() };
-            if current_ref.left.is_some() {
-                parent = current_ref.left;
+            if current_ref.left().is_some() {
+                parent = current_ref.left();
                 direction.push(ComingFrom::Left);
                 continue;
             }
-            if current_ref.right.is_some() {
-                parent = current_ref.right;
+            if current_ref.right().is_some() {
+                parent = current_ref.right();
                 direction.push(ComingFrom::Right);
                 continue;
             }
@@ -428,8 +494,8 @@ impl<K, V, C> Root<K, V, C> {
             // drop; don't call rbtree erase => needless overhead.
             if let Some(mut parent) = parent {
                 match direction.pop() {
-                    Some(ComingFrom::Left) => unsafe { parent.as_mut() }.left = None,
-                    Some(ComingFrom::Right) => unsafe { parent.as_mut() }.right = None,
+                    Some(ComingFrom::Left) => unsafe { parent.as_mut() }.set_left(None),
+                    Some(ComingFrom::Right) => unsafe { parent.as_mut() }.set_right(None),
                     _ => {}
                 }
             }
