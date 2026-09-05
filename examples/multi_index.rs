@@ -11,8 +11,8 @@
 use std::ptr::NonNull;
 
 use rougenoir::{
-    Color, ComingFrom, NodePtr,
-    intrusive::{Adapter, Link, Noop, Root},
+    NodePtr,
+    intrusive::{Adapter, Link, Noop, Root, find_by, insert_by},
     intrusive_adapter,
 };
 
@@ -48,6 +48,13 @@ impl EmployeeStore {
     }
 
     /// Inserts a new employee, linking the same allocation into both trees.
+    ///
+    /// Both indices are simple key comparisons with no per-node work
+    /// needed during descent, so `intrusive::insert_by` covers this
+    /// completely: no manual descent loop, no first-node special case.
+    ///
+    /// See `examples/interval_tree.rs` for a tree that instead walks by hand,
+    /// because it needs more than a read-only comparison
     fn insert(&mut self, id: u32, name: impl Into<String>) {
         let node = NonNull::from(Box::leak(Box::new(Employee {
             by_id: Link::new(),
@@ -56,53 +63,37 @@ impl EmployeeStore {
             name: name.into(),
         })));
 
-        link_by_id(&mut self.by_id, node);
-        link_by_name(&mut self.by_name, node);
+        // SAFETY: node is freshly leaked and unlinked in either tree; every
+        // link reachable from by_id/by_name points at a live Employee.
+        unsafe {
+            insert_by::<ByIdAdapter, _>(&mut self.by_id, node, |c| id.cmp(&c.id));
+            let name = &node.as_ref().name;
+            insert_by::<ByNameAdapter, _>(&mut self.by_name, node, |c| name.cmp(&c.name));
+        }
         self.len += 1;
     }
 
     fn get_by_id(&self, id: u32) -> Option<&Employee> {
-        // SAFETY: by_id.node, if any, embeds a live Employee.
-        let mut current = self
-            .by_id
-            .node
-            .map(|l| unsafe { ByIdAdapter::get_value(l) });
-        while let Some(candidate) = current {
-            // SAFETY: candidate points at a live Employee.
-            let candidate_ref = unsafe { candidate.as_ref() };
-            current = match id.cmp(&candidate_ref.id) {
-                std::cmp::Ordering::Equal => return Some(candidate_ref),
-                // SAFETY: candidate points at a live Employee in this tree.
-                std::cmp::Ordering::Less => unsafe { ByIdAdapter::left(candidate) },
-                std::cmp::Ordering::Greater => unsafe { ByIdAdapter::right(candidate) },
-            };
-        }
-        None
+        // SAFETY: every link reachable from by_id points at a live Employee.
+        let found = unsafe { find_by::<ByIdAdapter>(self.by_id.node, |c| id.cmp(&c.id)) };
+        // SAFETY: found, if any, points at a live Employee.
+        found.map(|n| unsafe { n.as_ref() })
     }
 
     fn get_by_name(&self, name: &str) -> Option<&Employee> {
-        // SAFETY: by_name.node, if any, embeds a live Employee.
-        let mut current = self
-            .by_name
-            .node
-            .map(|l| unsafe { ByNameAdapter::get_value(l) });
-        while let Some(candidate) = current {
-            // SAFETY: candidate points at a live Employee.
-            let candidate_ref = unsafe { candidate.as_ref() };
-            current = match name.cmp(candidate_ref.name.as_str()) {
-                std::cmp::Ordering::Equal => return Some(candidate_ref),
-                // SAFETY: candidate points at a live Employee in this tree.
-                std::cmp::Ordering::Less => unsafe { ByNameAdapter::left(candidate) },
-                std::cmp::Ordering::Greater => unsafe { ByNameAdapter::right(candidate) },
-            };
-        }
-        None
+        // SAFETY: every link reachable from by_name points at a live Employee.
+        let found =
+            unsafe { find_by::<ByNameAdapter>(self.by_name.node, |c| name.cmp(c.name.as_str())) };
+        // SAFETY: found, if any, points at a live Employee.
+        found.map(|n| unsafe { n.as_ref() })
     }
 
     /// Removes the employee with the given `id` from both trees and frees
     /// it, returning `true` if one was found.
     fn remove(&mut self, id: u32) -> bool {
-        let Some(node) = self.find_node_by_id(id) else {
+        // SAFETY: every link reachable from by_id points at a live Employee.
+        let Some(node) = (unsafe { find_by::<ByIdAdapter>(self.by_id.node, |c| id.cmp(&c.id)) })
+        else {
             return false;
         };
         // SAFETY: node embeds live Links in both trees; erasing it from one
@@ -116,122 +107,6 @@ impl EmployeeStore {
         }
         self.len -= 1;
         true
-    }
-
-    fn find_node_by_id(&self, id: u32) -> Option<NonNull<Employee>> {
-        // SAFETY: by_id.node, if any, embeds a live Employee.
-        let mut current = self
-            .by_id
-            .node
-            .map(|l| unsafe { ByIdAdapter::get_value(l) });
-        while let Some(candidate) = current {
-            // SAFETY: candidate points at a live Employee.
-            let candidate_id = unsafe { candidate.as_ref() }.id;
-            current = match id.cmp(&candidate_id) {
-                std::cmp::Ordering::Equal => return Some(candidate),
-                // SAFETY: candidate points at a live Employee in this tree.
-                std::cmp::Ordering::Less => unsafe { ByIdAdapter::left(candidate) },
-                std::cmp::Ordering::Greater => unsafe { ByIdAdapter::right(candidate) },
-            };
-        }
-        None
-    }
-}
-
-/// Descends `root` by `id`, links the new node in, and rebalances — the
-/// same "caller does the BST walk, the engine only rebalances" split
-/// `examples/interval_tree.rs` and `crate::Tree::insert` both use.
-fn link_by_id(root: &mut IdRoot, node: NonNull<Employee>) {
-    match root.node {
-        None => {
-            // SAFETY: node is freshly leaked and not yet part of any tree;
-            // a lone root must be black.
-            unsafe { ByIdAdapter::set_color(node, Color::Black) };
-            // SAFETY: node embeds a live Link.
-            root.node = Some(unsafe { ByIdAdapter::get_link(node) });
-        }
-        Some(root_link) => {
-            // SAFETY: root_link embeds a live Employee.
-            let mut current = Some(unsafe { ByIdAdapter::get_value(root_link) });
-            let mut parent = current.expect("tree is non-empty by the match guard above");
-            let mut direction = ComingFrom::Left;
-            // SAFETY: node is live (freshly leaked above).
-            let id = unsafe { node.as_ref() }.id;
-
-            while let Some(candidate) = current {
-                parent = candidate;
-                // SAFETY: candidate points at a live Employee.
-                let candidate_id = unsafe { candidate.as_ref() }.id;
-                direction = if id < candidate_id {
-                    ComingFrom::Left
-                } else {
-                    ComingFrom::Right
-                };
-                current = match direction {
-                    // SAFETY: candidate points at a live Employee in this tree.
-                    ComingFrom::Left => unsafe { ByIdAdapter::left(candidate) },
-                    ComingFrom::Right => unsafe { ByIdAdapter::right(candidate) },
-                };
-            }
-
-            // SAFETY: node is freshly leaked and unlinked; parent is a
-            // live Employee belonging to this tree.
-            unsafe {
-                Link::link(
-                    ByIdAdapter::get_link(node),
-                    ByIdAdapter::get_link(parent),
-                    direction,
-                );
-                root.insert(ByIdAdapter::get_link(node));
-            }
-        }
-    }
-}
-
-/// Descends `root` by `name`. See [`link_by_id`].
-fn link_by_name(root: &mut NameRoot, node: NonNull<Employee>) {
-    match root.node {
-        None => {
-            // SAFETY: node is freshly leaked and not yet part of any tree;
-            // a lone root must be black.
-            unsafe { ByNameAdapter::set_color(node, Color::Black) };
-            // SAFETY: node embeds a live Link.
-            root.node = Some(unsafe { ByNameAdapter::get_link(node) });
-        }
-        Some(root_link) => {
-            // SAFETY: root_link embeds a live Employee.
-            let mut current = Some(unsafe { ByNameAdapter::get_value(root_link) });
-            let mut parent = current.expect("tree is non-empty by the match guard above");
-            let mut direction = ComingFrom::Left;
-
-            while let Some(candidate) = current {
-                parent = candidate;
-                // SAFETY: node/candidate point at live Employees.
-                let (name, candidate_name) =
-                    unsafe { (&node.as_ref().name, &candidate.as_ref().name) };
-                direction = if name < candidate_name {
-                    ComingFrom::Left
-                } else {
-                    ComingFrom::Right
-                };
-                current = match direction {
-                    // SAFETY: candidate points at a live Employee in this tree.
-                    ComingFrom::Left => unsafe { ByNameAdapter::left(candidate) },
-                    ComingFrom::Right => unsafe { ByNameAdapter::right(candidate) },
-                };
-            }
-
-            // SAFETY: node is freshly leaked and unlinked; parent is a
-            // live Employee belonging to this tree.
-            unsafe {
-                Link::link(
-                    ByNameAdapter::get_link(node),
-                    ByNameAdapter::get_link(parent),
-                    direction,
-                );
-                root.insert(ByNameAdapter::get_link(node));
-            }
-        }
     }
 }
 
