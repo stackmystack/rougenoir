@@ -20,7 +20,7 @@ jobs:
       - name: Install just
         uses: taiki-e/install-action@v2
         with:
-          tool: just,typos
+          tool: just,typos,cargo-nextest
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -41,6 +41,8 @@ jobs:
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - run: just lint
+
+      - run: just test-examples
 
   test:
     uses: ./.github/workflows/miri.yml

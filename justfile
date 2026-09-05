@@ -52,6 +52,17 @@ test *args:
   cargo nextest run {{args}} --tests --examples
   cargo test --doc
 
+# Compile, unit-test, and run every example's `main`.
+test-examples:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  cargo nextest run --examples
+  for f in examples/*.rs; do
+    name=$(basename "$f" .rs)
+    echo "==> cargo run --example $name"
+    cargo run --quiet --example "$name"
+  done
+
 typos:
   typos --sort
 
