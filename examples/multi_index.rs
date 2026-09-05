@@ -10,11 +10,8 @@
 // ordered by `id`, one ordered by `name`.
 use std::ptr::NonNull;
 
-use rougenoir::{
-    NodePtr,
-    intrusive::{Adapter, Link, Noop, Root, find_by, insert_by},
-    intrusive_adapter,
-};
+use rougenoir::intrusive::{Adapter, Link, Noop, Root, find_by, for_each_postorder, insert_by};
+use rougenoir::intrusive_adapter;
 
 struct Employee {
     by_id: Link,
@@ -119,41 +116,13 @@ impl Drop for EmployeeStore {
         // without needing to walk `by_name` too.
         //
         // SAFETY: every node in by_id was leaked via Box::leak in `insert`,
-        // and this store owns them exclusively.
-        unsafe { free_subtree(self.by_id.node) };
-    }
-}
-
-/// Frees every node reachable from `link` (by-id links, but any embedded
-/// `Link` field addresses the same allocations).
-///
-/// # Safety
-///
-/// Every link reachable from `link` must point at a live `Employee`
-/// originally produced by `Box::leak`, and none of them may be touched
-/// again after this call.
-unsafe fn free_subtree(link: NodePtr<Link>) {
-    let Some(link) = link else {
-        return;
-    };
-    // SAFETY: delegated to the caller.
-    let node = unsafe { ByIdAdapter::get_value(link) };
-    // SAFETY: node points at a live Employee belonging to this tree.
-    let left = unsafe { ByIdAdapter::left(node) };
-    // SAFETY: see above.
-    let right = unsafe { ByIdAdapter::right(node) };
-    // SAFETY: node was produced by Box::leak in `insert`, and this is the
-    // only remaining reference to it.
-    drop(unsafe { Box::from_raw(node.as_ptr()) });
-
-    // SAFETY: left/right, if any, point at live Employees.
-    let left_link = left.map(|l| unsafe { ByIdAdapter::get_link(l) });
-    // SAFETY: see above.
-    let right_link = right.map(|r| unsafe { ByIdAdapter::get_link(r) });
-    // SAFETY: delegated to the caller (transitively, for these subtrees).
-    unsafe {
-        free_subtree(left_link);
-        free_subtree(right_link);
+        // and this store owns them exclusively; the closure frees each one
+        // exactly once and never touches it again afterward.
+        unsafe {
+            for_each_postorder::<ByIdAdapter>(self.by_id.node, &mut |n| {
+                drop(Box::from_raw(n.as_ptr()))
+            });
+        }
     }
 }
 

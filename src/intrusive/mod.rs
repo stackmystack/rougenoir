@@ -15,7 +15,9 @@ mod root;
 
 pub use adapter::Adapter;
 pub use callbacks::{Noop, TreeCallbacks};
-pub use convenience::{InsertPosition, find_by, find_insert_position, insert_by};
+pub use convenience::{
+    InsertPosition, find_by, find_insert_position, for_each_postorder, insert_by,
+};
 pub use link::Link;
 pub use root::Root;
 #[cfg(debug_assertions)]

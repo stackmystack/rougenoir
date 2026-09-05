@@ -8,8 +8,8 @@
 use std::{marker::PhantomData, ptr::NonNull};
 
 use rougenoir::{
-    Color, ComingFrom, NodePtr,
-    intrusive::{Adapter, Link, Root, TreeCallbacks},
+    Color, ComingFrom,
+    intrusive::{Adapter, Link, Root, TreeCallbacks, for_each_postorder},
 };
 
 /// The interval `[from, to]` a caller inserts. `IntervalNode` below is the
@@ -255,46 +255,21 @@ where
     K: Ord,
 {
     fn drop(&mut self) {
+        // The intrusive API never owns allocation (mirroring the kernel's
+        // `struct rb_node`), so unlike `Tree`/`CachedTree` there is no
+        // built-in teardown to call.
+        //
+        // `for_each_postorder` is the additive convenience that replaces
+        // hand-writing that walk.
+        //
         // SAFETY: every node in this tree was leaked via Box::leak in
-        // `insert`, and this tree owns them exclusively.
-        unsafe { free_subtree::<K, V>(self.root.node) };
-    }
-}
-
-/// Frees every node reachable from `link`.
-///
-/// The intrusive API never owns allocation (mirroring the kernel's
-/// `struct rb_node`), so unlike `Tree`/`CachedTree` there is no built-in
-/// teardown to call here — the tree's own `Drop` impl has to walk and free
-/// its nodes by hand, exactly as a kernel user of an intrusive rbtree would.
-///
-/// # Safety
-///
-/// Every link reachable from `link` must point at a live `IntervalNode<K, V>`
-/// originally produced by `Box::leak`, and none of them may be touched again
-/// after this call.
-unsafe fn free_subtree<K, V>(link: NodePtr<Link>) {
-    let Some(link) = link else {
-        return;
-    };
-    // SAFETY: delegated to the caller.
-    let node = unsafe { IntervalNodeAdapter::<K, V>::get_value(link) };
-    // SAFETY: node points at a live IntervalNode belonging to this tree.
-    let left = unsafe { IntervalNodeAdapter::<K, V>::left(node) };
-    // SAFETY: see above.
-    let right = unsafe { IntervalNodeAdapter::<K, V>::right(node) };
-    // SAFETY: node was produced by Box::leak in `insert`, and this is the
-    // only remaining reference to it.
-    drop(unsafe { Box::from_raw(node.as_ptr()) });
-
-    // SAFETY: left/right, if any, point at live IntervalNodes.
-    let left_link = left.map(|l| unsafe { IntervalNodeAdapter::<K, V>::get_link(l) });
-    // SAFETY: see above.
-    let right_link = right.map(|r| unsafe { IntervalNodeAdapter::<K, V>::get_link(r) });
-    // SAFETY: delegated to the caller (transitively, for these subtrees).
-    unsafe {
-        free_subtree::<K, V>(left_link);
-        free_subtree::<K, V>(right_link);
+        // `insert`, and this tree owns them exclusively; the closure frees
+        // each one exactly once and never touches it again afterward.
+        unsafe {
+            for_each_postorder::<IntervalNodeAdapter<K, V>>(self.root.node, &mut |n| {
+                drop(Box::from_raw(n.as_ptr()))
+            });
+        }
     }
 }
 

@@ -1,5 +1,7 @@
-//! Optional convenience helpers for the common case: a tree ordered by a
-//! plain key comparison, with no per-node work needed during descent.
+//! Optional convenience helpers for common chores: a tree ordered by a
+//! plain key comparison with no per-node work needed during descent
+//! ([`insert_by`]/[`find_by`]), and walking every value to tear a tree down
+//! ([`for_each_postorder`]).
 //!
 //! Everything here is built entirely on the public primitives
 //! ([`Adapter::left`]/[`Adapter::right`], [`Link::link`], [`Root::insert`],
@@ -146,6 +148,41 @@ pub unsafe fn find_by<A: Adapter>(
     }
 }
 
+/// Calls `f` once for every value reachable from `link`, children before
+/// parent (post-order), so `f` can free each value's allocation without
+/// disturbing subtrees not yet visited; the same job `Root::dealloc` does
+/// for `Tree`/`CachedTree`, since the intrusive API never owns allocation
+/// and so has no automatic teardown of its own.
+///
+/// # Safety
+///
+/// Every link reachable from `link` must point at a live `A::Value`, and
+/// `f` must not touch a value again after it (or a later call to `f`) frees
+/// it.
+pub unsafe fn for_each_postorder<A: Adapter>(
+    link: NodePtr<Link>,
+    f: &mut impl FnMut(NonNull<A::Value>),
+) {
+    let Some(link) = link else {
+        return;
+    };
+    // SAFETY: delegated to the caller.
+    let value = unsafe { A::get_value(link) };
+    // Capture the children before calling `f` which may free `value`, but
+    // that doesn't touch the separate allocations `left`/`right` point to.
+    // SAFETY: value points at a live A::Value, per the caller's contract.
+    let left = unsafe { A::left(value) };
+    // SAFETY: see above.
+    let right = unsafe { A::right(value) };
+    // SAFETY: left/right, if any, point at live A::Values reachable from
+    // `link`, per the caller's contract (transitively, for these subtrees).
+    unsafe {
+        for_each_postorder::<A>(left.map(|l| A::get_link(l)), f);
+        for_each_postorder::<A>(right.map(|r| A::get_link(r)), f);
+    }
+    f(value);
+}
+
 #[cfg(test)]
 mod test {
     use quickcheck_macros::quickcheck;
@@ -282,5 +319,58 @@ mod test {
         }
 
         ok
+    }
+
+    #[test]
+    fn for_each_postorder_visits_every_node_exactly_once() {
+        let mut root = IntRoot::new(Noop::new());
+        let keys = [5, 1, 9, 3, 7, 0, -2];
+        let entries: Vec<_> = keys
+            .iter()
+            .map(|&key| {
+                let entry = leak(key);
+                // SAFETY: entry is freshly leaked and unlinked; root's
+                // links all point at live IntEntries.
+                unsafe { insert_by::<IntEntryAdapter, _>(&mut root, entry, |c| key.cmp(&c.key)) };
+                entry
+            })
+            .collect();
+
+        let mut visited = Vec::new();
+        // SAFETY: root's links all point at live IntEntries; the closure
+        // only reads each value, and every value is still alive throughout
+        // (nothing is freed here).
+        unsafe {
+            for_each_postorder::<IntEntryAdapter>(root.node, &mut |n| visited.push(n.as_ref().key));
+        }
+        visited.sort();
+        let mut expected = keys.to_vec();
+        expected.sort();
+        assert_eq!(visited, expected);
+
+        for entry in entries {
+            // SAFETY: entry was leaked above and hasn't been freed yet.
+            drop(unsafe { unleak(entry) });
+        }
+    }
+
+    #[test]
+    fn for_each_postorder_can_free_every_node() {
+        let mut root = IntRoot::new(Noop::new());
+        for key in 0..50i16 {
+            let entry = leak(key);
+            // SAFETY: entry is freshly leaked and unlinked; root's links
+            // all point at live IntEntries.
+            unsafe { insert_by::<IntEntryAdapter, _>(&mut root, entry, |c| key.cmp(&c.key)) };
+        }
+
+        // SAFETY: root's links all point at live IntEntries, each
+        // originally produced by Box::leak (via `leak`); the closure frees
+        // each one exactly once and never touches it again afterward.
+        unsafe {
+            for_each_postorder::<IntEntryAdapter>(root.node, &mut |n| drop(unleak(n)));
+        }
+        // Nothing left to assert on directly (it's all freed). A double
+        // free or a dangling access here is exactly what Miri is for.
     }
 }
