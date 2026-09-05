@@ -7,7 +7,12 @@
 //! [`crate::intrusive_adapter!`] and converts between a `Link` pointer and a
 //! pointer to the struct that embeds it.
 mod adapter;
+mod callbacks;
 mod link;
+mod node_ptr;
+mod root;
 
 pub use adapter::Adapter;
+pub use callbacks::{Noop, TreeCallbacks};
 pub use link::Link;
+pub use root::Root;
