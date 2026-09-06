@@ -20,8 +20,34 @@ clippy-fix *args:
 clippy-fix-now:
   @just clippy-fix --allow-dirty --allow-staged
 
-bench:
-  cargo bench
+# Benchmark targets. We always pass `--bench` explicitly: a bare
+# `cargo bench` also builds the crate's unit-test target, which currently
+# fails to compile in release (debug-assertion-gated test helpers) — an
+# orthogonal, pre-existing issue.
+
+# Quick smoke run: 2 sizes, 3 shapes, few samples. Seconds.
+bench *args:
+  BENCH_QUICK=1 cargo bench --bench rougenoir {{args}}
+
+# Default run: rougenoir's own suite, 3 sizes up to 64k.
+bench-rougenoir *args:
+  cargo bench --bench rougenoir {{args}}
+
+# Full matrix, including the 1M out-of-cache size. Tens of minutes.
+bench-full *args:
+  BENCH_FULL=1 cargo bench --bench rougenoir {{args}}
+
+# rougenoir vs BTreeMap vs the rbtree crate.
+bench-compare *args:
+  cargo bench --bench compare {{args}}
+
+# Record the current numbers under a name (run before a change).
+bench-baseline name:
+  BENCH_FULL=1 cargo bench --bench rougenoir -- --save-baseline {{name}}
+
+# Compare the working tree against a recorded baseline (run after).
+bench-cmp name:
+  BENCH_FULL=1 cargo bench --bench rougenoir -- --baseline {{name}}
 
 build *args:
   cargo build {{args}}

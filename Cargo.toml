@@ -1,5 +1,6 @@
 [package]
 authors = ["Firas al-Khalil <firasalkhalil@gmail.com>"]
+autobenches = false
 description = "A red-black tree and set with callbacks"
 edition = "2024"
 license = "GPL-2.0-only"
@@ -17,6 +18,23 @@ rand = "0.9"
 rand_chacha = "0.9"
 rbtree = "0.2"
 
+# Benchmarks are release-realistic: LTO + a single codegen unit so the
+# monomorphised, inlined tree code the benches see matches what a `--release`
+# downstream crate gets. Slower to build, steadier to measure.
+[profile.bench]
+codegen-units = 1
+lto = "thin"
+
+# The regression suite: rougenoir's own types across every insertion shape and
+# size regime. This is what you run day to day and what `--save-baseline`
+# tracks.
 [[bench]]
-name = "tree"
+name = "rougenoir"
+harness = false
+
+# rougenoir vs `std::collections::BTreeMap` vs the `rbtree` crate. A separate
+# target because it answers a "once in a while" question and roughly triples
+# measurement time.
+[[bench]]
+name = "compare"
 harness = false

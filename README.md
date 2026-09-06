@@ -116,23 +116,143 @@ See the [multi-index example](examples/multi_index.rs).
 
 ## Benchmarks
 
-You can run the benchmarks with `just bench` or `cargo bench` and check on your local machine.
+A criterion suite lives in [`benches/`](benches/): `just bench` for a quick
+smoke run, `just bench-full` for the whole matrix, `just bench-compare` to
+race the alternatives. Method, input shapes and run modes are documented in
+[docs/contributing.md](docs/contributing.md#benchmarking).
 
-I ran them on an old Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz and on an M1 Max,
-and in both cases I noticed that rougenoir can outperform
-[`std::collections::BTreeMap`](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html)
-for small trees (~ < 4k), but it's a microbenchmark so take it with a kilo of
-salt.
+### The machine
 
-I think that this can be significantly and reliably improved once a custom
-allocator can be used.
+|           |                                                                                     |
+| --------- | ----------------------------------------------------------------------------------------- |
+| CPU       | Intel Core i7-7700HQ — Kaby Lake, 4C/8T, 2.8 GHz base / 3.8 GHz turbo (**turbo on**)      |
+| Cache     | L1d 32 KiB/core · L2 256 KiB/core · L3 6 MiB shared                                       |
+| Memory    | 16 GiB DDR4                                                                              |
+| OS        | Arch Linux, kernel 7.1.9, x86-64                                                         |
+| Toolchain | rustc 1.92.0 / LLVM 21 · `--release` + `lto = "thin"` + `codegen-units = 1`              |
+| criterion | 0.6 — 20 samples, 3 s + 0.75 s warm-up per point (`BENCH_PRECISE=1`)                      |
+| Isolation | `taskset -c 2` · `powersave` governor                                                    |
+
+It's a laptop, not a bench rig — turbo is on and the governor is
+`powersave`. **The 4 Ki and 64 Ki rows are the trustworthy ones**; at
+n = 256 the per-key cost is tens of nanoseconds and criterion-loop overhead
+plus turbo drift swamp real differences, so read that row as an order of
+magnitude, not a measurement. Even at scale, treat < 10 % as noise.
+
+### Method
+
+Every implementation is fed the **identical** key sequence from a fixed
+`ChaCha8` seed. Figures are criterion's median as **nanoseconds per
+element** — for `insert`, the per-key cost of building the whole tree from
+empty; for `iterate`, per element walked. `n` is the tree size.
+
+### vs `std::collections::BTreeMap` and the [`rbtree`](https://crates.io/crates/rbtree) crate
+
+**insert** — build from empty (ns/key)
+
+| n     | order     | `BTreeMap` | `rbtree` | rougenoir `Tree` | `CachedTree` |
+| ----- | --------- | ---------: | -------: | ---------------: | -----------: |
+| 256   | ascending |         31 |       67 |               53 |           50 |
+| 256   | random    |         20 |       66 |               56 |           60 |
+| 4 Ki  | ascending |         50 |       96 |               54 |           55 |
+| 4 Ki  | random    |         74 |      102 |              130 |          133 |
+| 64 Ki | ascending |         85 |      240 |              130 |          134 |
+| 64 Ki | random    |        137 |      284 |              279 |          299 |
+
+**lookup** — `get`, every key present (ns/key)
+
+| n     | `BTreeMap` | `rbtree` | rougenoir |
+| ----- | ---------: | -------: | --------: |
+| 256   |         19 |        8 |         9 |
+| 4 Ki  |         65 |       84 |        87 |
+| 64 Ki |        124 |      264 |       255 |
+
+**remove** — delete every key, random order (ns/key)
+
+| n     | `BTreeMap` | `rbtree` | rougenoir |
+| ----- | ---------: | -------: | --------: |
+| 256   |         25 |       66 |        47 |
+| 4 Ki  |         80 |      146 |       121 |
+| 64 Ki |        133 |      339 |       272 |
+
+**iterate** — in-order walk (ns/element)
+
+| n     | `BTreeMap` | `rbtree` | rougenoir |
+| ----- | ---------: | -------: | --------: |
+| 256   |        1.3 |      2.6 |       3.1 |
+| 4 Ki  |        1.4 |      8.7 |       7.3 |
+| 64 Ki |        1.7 |       47 |        35 |
+
+**Reading it**
+
+- On **sorted** inserts rougenoir matches `BTreeMap` up to L2 (54 vs 50
+  ns/key) and trails it ~1.5× out of cache; on **random** inserts `BTreeMap`
+  is ~1.8–2× ahead from 4 Ki up. Same cause both times — `BTreeMap` packs
+  many keys per cache line, rougenoir chases one `Box`-ed node per tree
+  level. rougenoir is ~2× faster than `rbtree` on sorted inserts; on random
+  inserts `rbtree` edges it in L2 and they converge out of cache.
+- **Lookup**: `BTreeMap`'s cache density wins once the tree leaves L1 — 1.3×
+  ahead at 4 Ki, 2× at 64 Ki. rougenoir tracks `rbtree` throughout.
+- **Remove**: rougenoir is consistently ~1.3× faster than `rbtree` and
+  ~1.5–2× slower than `BTreeMap`.
+- **Iteration** is `BTreeMap`'s runaway — it scans an array while a pointer
+  tree follows `next()` links out of cache. rougenoir still beats `rbtree`
+  at scale.
+
+### rougenoir across insertion orders (`Tree`, ns/key)
+
+| order        | 4 Ki | 64 Ki | |
+| ------------ | ---: | ----: | --- |
+| ascending    |   56 |   140 | best case — every insert on the right spine |
+| descending   |   67 |   134 | mirror image; the left spine |
+| duplicates   |   58 |   103 | keys from a domain of `n/16` — ~15⁄16 of inserts take the update path, no alloc, no rebalance |
+| adversarial  |  100 |   125 | a bit-reversal permutation — the textbook *unbalanced*-BST adversary; **benign** for a self-balancing tree |
+| random       |  121 |   280 | realistic — no locality between successive keys |
+| shuffled     |  147 |   284 | the *same keys* as `ascending`, so the ~2.5× gap is purely insertion *order* |
+
+### What `CachedTree` buys
+
+Draining the tree with `pop_first` until empty (ns/element):
+
+| n     | `Tree` | `CachedTree` |
+| ----- | -----: | -----------: |
+| 256   |     30 |           27 |
+| 4 Ki  |     56 |           32 |
+| 64 Ki |     78 |           51 |
+
+The cached leftmost pointer turns each pop's O(log n) descent into O(1).
+The write-path tax is small — sorted insert is unchanged (55 vs 54 ns/key
+at 4 Ki, 134 vs 130 at 64 Ki), random insert pays ~7 % out of cache.
+
+### Augmentation is nearly free
+
+`Noop` vs an order-statistics callback (every node caches its subtree size;
+`propagate` runs to the root on each insert), ns/key:
+
+| n     | `Noop` | order-stat | overhead |
+| ----- | -----: | ---------: | -------: |
+| 256   |     72 |         65 | ~0 (noise) |
+| 4 Ki  |    166 |        172 |     +3 % |
+| 64 Ki |    343 |        355 |     +3 % |
+
+The propagate path is already cache-hot from the insertion descent, so the
+extra work barely shows against the per-node allocation. (These use a
+12-byte value, so the absolute numbers run above the `u64`-value insert
+table.)
+
+### The lever
+
+Every rougenoir node is its own leaked `Box`. That one fact accounts for
+most of the distance to `BTreeMap` on random-access workloads; a pooled or
+bump allocator (see [_Nice to Have_](#nice-to-have)) is where the real
+speed-up waits.
 
 ## Nice to Have
 
 - Custom allocator.
-  - Currently it's leaking boxes.
+  - Currently every node is its own leaked `Box` — the [Benchmarks](#benchmarks)
+    show this is the dominant cost on random-access workloads.
   - I'm thinking of [`hashbrown`](https://github.com/rust-lang/hashbrown).
-  - And of course benchmarks would make more sense.
 - Concurrency.
   - AFAICT the kernel's implementation allows for lock-free concurrency.
   - I'm not a linux expert, so I might be wrong.
