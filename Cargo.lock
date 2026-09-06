@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+
+[[package]]
 name = "anes"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -34,6 +40,15 @@ name = "bitflags"
 version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
+
+[[package]]
+name = "blink-alloc"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e669f146bb8b2327006ed94c69cf78c8ec81c100192564654230a40b4f091d82"
+dependencies = [
+ "allocator-api2",
+]
 
 [[package]]
 name = "bumpalo"
@@ -496,6 +511,8 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 name = "rougenoir"
 version = "0.1.0"
 dependencies = [
+ "blink-alloc",
+ "bumpalo",
  "criterion",
  "pretty_assertions",
  "quickcheck",

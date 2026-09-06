@@ -6,7 +6,11 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{ComingFrom, Node, NodePtr, Noop, ParentColor, Root, Tree, TreeCallbacks, intrusive};
+use crate::{
+    ComingFrom, Node, NodePtr, Noop, ParentColor, Root, Tree, TreeCallbacks,
+    alloc::{self, Allocator, Global},
+    intrusive,
+};
 
 impl<K, V> Tree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -17,13 +21,25 @@ impl<K, V> Tree<K, V, Noop<K, V>> {
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Default for Tree<K, V, C> {
-    fn default() -> Self {
-        Self::with_callbacks(C::default())
+impl<K, V, A: Allocator> Tree<K, V, Noop<K, V>, A> {
+    /// Creates an empty `Tree` whose nodes are allocated from `alloc`.
+    pub fn new_in(alloc: A) -> Self {
+        Tree {
+            len: 0,
+            root: Root::new_in(Noop::new(), alloc),
+        }
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default, A: Allocator + Default> Default
+    for Tree<K, V, C, A>
+{
+    fn default() -> Self {
+        Self::with_callbacks_in(C::default(), A::default())
+    }
+}
+
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C, Global> {
     pub fn with_callbacks(augmented: C) -> Self {
         Tree {
             len: 0,
@@ -32,7 +48,20 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Tree<K, V, C, A> {
+    /// Creates an empty `Tree` with the given augmentation callbacks, whose
+    /// nodes are allocated from `alloc`.
+    pub fn with_callbacks_in(augmented: C, alloc: A) -> Self {
+        Tree {
+            len: 0,
+            root: Root::new_in(augmented, alloc),
+        }
+    }
+}
+
+impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default, A: Allocator + Default>
+    Tree<K, V, C, A>
+{
     /// Removes all key-value pairs from the tree, leaving it empty.
     ///
     /// # Examples
@@ -55,12 +84,13 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Tree<K, V, C> {
             root: Root {
                 callbacks: mem::take(&mut self.root.callbacks),
                 node: mem::take(&mut self.root.node),
+                alloc: mem::take(&mut self.root.alloc),
             },
         });
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Tree<K, V, C, A> {
     /// Inserts a key-value pair into the tree.
     ///
     /// If the tree did not have this key present, `None` is returned.
@@ -102,9 +132,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
                 ))
             }
             intrusive::InsertPosition::Vacant { parent, direction } => {
-                // SAFETY: Box::into_raw of a fresh allocation is never null.
-                let node = unsafe { Node::<K, V>::leak(key, value) }.expect("freshly leaked node");
-                // SAFETY: node is freshly leaked and unlinked; parent, if
+                let node = alloc::alloc_node(&self.root.alloc, key, value)
+                    .expect("node allocation failed");
+                // SAFETY: node is freshly allocated and unlinked; parent, if
                 // any, is exactly what find_insert_position just returned.
                 unsafe { self.root.link_vacant(node, parent, direction) };
                 self.len += 1;
@@ -176,11 +206,13 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     ///
     /// This is an internal method used by other removal operations.
     pub(crate) unsafe fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
-        // SAFETY: pop_node delegates the safety to the caller; he needs to guarantee a non null ptr.
-        let mut node = unsafe { Node::<K, V>::unleak(node) };
-        self.root.erase(node.as_mut());
+        // SAFETY: the caller guarantees `node` is a live node of this tree.
+        let mut node = NonNull::new(node).expect("pop_node: null node");
+        // SAFETY: `node` is live; `erase` only unlinks it, the memory stays valid.
+        self.root.erase(unsafe { node.as_mut() });
         self.len -= 1;
-        (node.key, node.value)
+        // SAFETY: `node` is now unlinked from the tree and solely owned here.
+        unsafe { alloc::take_node(&self.root.alloc, node) }
     }
 
     /// Removes the entry with the given key from the tree and returns the stored
@@ -213,7 +245,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 }
 
-impl<K, V, C> Tree<K, V, C> {
+impl<K, V, C, A: Allocator> Tree<K, V, C, A> {
     /// Returns `true` if the key is in the tree.
     ///
     /// # Examples
@@ -520,7 +552,8 @@ impl<K, V, C> Tree<K, V, C> {
     }
 }
 
-impl<K, Q: ?Sized, V, C: TreeCallbacks<Key = K, Value = V>> Index<&Q> for Tree<K, V, C>
+impl<K, Q: ?Sized, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Index<&Q>
+    for Tree<K, V, C, A>
 where
     K: Borrow<Q> + Ord,
     Q: Ord,
@@ -538,7 +571,7 @@ where
     }
 }
 
-impl<K, V, C> Drop for Tree<K, V, C> {
+impl<K, V, C, A: Allocator> Drop for Tree<K, V, C, A> {
     fn drop(&mut self) {
         // SAFETY: we're literally in drop.
         unsafe {
@@ -548,7 +581,7 @@ impl<K, V, C> Drop for Tree<K, V, C> {
 }
 
 #[cfg(debug_assertions)]
-impl<K, V, C> Tree<K, V, C>
+impl<K, V, C, A: Allocator> Tree<K, V, C, A>
 where
     K: std::fmt::Debug,
 {
@@ -558,7 +591,7 @@ where
     }
 }
 
-impl<K, V, C> std::fmt::Debug for Tree<K, V, C>
+impl<K, V, C, A: Allocator> std::fmt::Debug for Tree<K, V, C, A>
 where
     K: std::fmt::Debug,
     V: std::fmt::Debug,
@@ -569,52 +602,47 @@ where
     }
 }
 
-impl<K: PartialEq, V: PartialEq, C: PartialEq> PartialEq for Tree<K, V, C> {
-    fn eq(&self, other: &Tree<K, V, C>) -> bool {
+impl<K: PartialEq, V: PartialEq, C: PartialEq, A: Allocator> PartialEq for Tree<K, V, C, A> {
+    fn eq(&self, other: &Tree<K, V, C, A>) -> bool {
         self.len() == other.len()
             && self.root.callbacks == other.root.callbacks
             && self.iter().zip(other.iter()).all(|(a, b)| a == b)
     }
 }
 
-impl<K, V, C> Clone for Tree<K, V, C>
+impl<K, V, C, A> Clone for Tree<K, V, C, A>
 where
     K: Clone + Ord,
     V: Clone,
     C: Clone + TreeCallbacks<Key = K, Value = V>,
+    A: Allocator + Default,
 {
+    /// Clones the tree into a fresh `A::default()` allocator, preserving the
+    /// exact structure and colours.
     fn clone(&self) -> Self {
-        if self.is_empty() {
-            Tree {
-                len: 0,
-                root: self.root.clone(),
-            }
-        } else {
-            let mut tree = Tree {
-                len: 0,
-                root: Root {
-                    callbacks: self.root.callbacks.clone(),
-                    node: None,
-                },
-            };
-            // Recursively clone the tree structure to preserve exact colors and layout
-            if let Some(root) = self.root.node
-                && let Some(cloned_root) = Self::clone_node_recursive(root, std::ptr::null_mut())
-            {
-                tree.root.node = Some(cloned_root);
-                tree.len = self.len;
-            }
-            tree
+        let mut tree = Tree {
+            len: 0,
+            root: Root::new_in(self.root.callbacks.clone(), A::default()),
+        };
+        if !self.is_empty()
+            && let Some(root) = self.root.node
+            && let Some(cloned_root) =
+                Self::clone_node_recursive(&tree.root.alloc, root, std::ptr::null_mut())
+        {
+            tree.root.node = Some(cloned_root);
+            tree.len = self.len;
         }
+        tree
     }
 }
 
-impl<K, V, C> Tree<K, V, C>
+impl<K, V, C, A: Allocator> Tree<K, V, C, A>
 where
     K: Ord,
 {
     /// Recursively clone a node and its entire subtree, preserving structure and colors
     fn clone_node_recursive(
+        alloc: &A,
         node: NonNull<Node<K, V>>,
         parent: *mut Node<K, V>,
     ) -> Option<NonNull<Node<K, V>>>
@@ -626,8 +654,7 @@ where
         let node_ref = unsafe { node.as_ref() };
 
         // Allocate new node with cloned key and value
-        let mut new_node =
-            unsafe { Node::<K, V>::leak(node_ref.key.clone(), node_ref.value.clone()) }?;
+        let mut new_node = alloc::alloc_node(alloc, node_ref.key.clone(), node_ref.value.clone())?;
 
         // SAFETY: new_node is non-null
         {
@@ -637,14 +664,16 @@ where
 
             // Recursively clone left subtree
             if let Some(left) = node_ref.left()
-                && let Some(cloned_left) = Self::clone_node_recursive(left, new_node.as_ptr())
+                && let Some(cloned_left) =
+                    Self::clone_node_recursive(alloc, left, new_node.as_ptr())
             {
                 new_node_ref.set_left(Some(cloned_left));
             }
 
             // Recursively clone right subtree
             if let Some(right) = node_ref.right()
-                && let Some(cloned_right) = Self::clone_node_recursive(right, new_node.as_ptr())
+                && let Some(cloned_right) =
+                    Self::clone_node_recursive(alloc, right, new_node.as_ptr())
             {
                 new_node_ref.set_right(Some(cloned_right));
             }
@@ -697,35 +726,37 @@ where
     }
 }
 
-impl<K: PartialOrd, V: PartialOrd, C: PartialOrd> PartialOrd for Tree<K, V, C> {
+impl<K: PartialOrd, V: PartialOrd, C: PartialOrd, A: Allocator> PartialOrd for Tree<K, V, C, A> {
     #[inline]
-    fn partial_cmp(&self, other: &Tree<K, V, C>) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &Tree<K, V, C, A>) -> Option<Ordering> {
         self.iter().partial_cmp(other.iter())
     }
 }
 
-impl<K: Eq, V: Eq, C: Eq> Eq for Tree<K, V, C> {}
+impl<K: Eq, V: Eq, C: Eq, A: Allocator> Eq for Tree<K, V, C, A> {}
 
-impl<K: Ord, V: Ord, C: Ord> Ord for Tree<K, V, C> {
+impl<K: Ord, V: Ord, C: Ord, A: Allocator> Ord for Tree<K, V, C, A> {
     #[inline]
-    fn cmp(&self, other: &Tree<K, V, C>) -> Ordering {
+    fn cmp(&self, other: &Tree<K, V, C, A>) -> Ordering {
         self.iter().cmp(other.iter())
     }
 }
 
-unsafe impl<K, V, C> Send for Tree<K, V, C>
+unsafe impl<K, V, C, A> Send for Tree<K, V, C, A>
 where
     K: Send,
     V: Send,
     C: Send,
+    A: Allocator + Send,
 {
 }
 
-unsafe impl<K, V, C> Sync for Tree<K, V, C>
+unsafe impl<K, V, C, A> Sync for Tree<K, V, C, A>
 where
     K: Sync,
     V: Sync,
     C: Sync,
+    A: Allocator + Sync,
 {
 }
 

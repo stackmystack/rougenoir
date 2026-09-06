@@ -3,9 +3,14 @@ use std::{
     cmp::Ordering::{self, *},
     mem,
     ops::Index,
+    ptr::NonNull,
 };
 
-use crate::{CachedTree, Color, Node, NodePtr, Noop, ParentColor, Root, TreeCallbacks, intrusive};
+use crate::{
+    CachedTree, Color, Node, NodePtr, Noop, ParentColor, Root, TreeCallbacks,
+    alloc::{self, Allocator, Global},
+    intrusive,
+};
 
 impl<K, V> CachedTree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -17,13 +22,26 @@ impl<K, V> CachedTree<K, V, Noop<K, V>> {
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Default for CachedTree<K, V, C> {
-    fn default() -> Self {
-        Self::with_callbacks(C::default())
+impl<K, V, A: Allocator> CachedTree<K, V, Noop<K, V>, A> {
+    /// Creates an empty `CachedTree` whose nodes are allocated from `alloc`.
+    pub fn new_in(alloc: A) -> Self {
+        CachedTree {
+            leftmost: None,
+            len: 0,
+            root: Root::new_in(Noop::new(), alloc),
+        }
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default, A: Allocator + Default> Default
+    for CachedTree<K, V, C, A>
+{
+    fn default() -> Self {
+        Self::with_callbacks_in(C::default(), A::default())
+    }
+}
+
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C, Global> {
     pub fn with_callbacks(augmented: C) -> Self {
         CachedTree {
             leftmost: None,
@@ -33,7 +51,21 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> CachedTree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> CachedTree<K, V, C, A> {
+    /// Creates an empty `CachedTree` with the given augmentation callbacks,
+    /// whose nodes are allocated from `alloc`.
+    pub fn with_callbacks_in(augmented: C, alloc: A) -> Self {
+        CachedTree {
+            leftmost: None,
+            len: 0,
+            root: Root::new_in(augmented, alloc),
+        }
+    }
+}
+
+impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default, A: Allocator + Default>
+    CachedTree<K, V, C, A>
+{
     pub fn clear(&mut self) {
         drop(CachedTree {
             leftmost: self.leftmost.take(),
@@ -41,12 +73,13 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> CachedTree<K, V, C> {
             root: Root {
                 callbacks: mem::take(&mut self.root.callbacks),
                 node: mem::take(&mut self.root.node),
+                alloc: mem::take(&mut self.root.alloc),
             },
         });
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> CachedTree<K, V, C, A> {
     pub fn insert(&mut self, key: K, value: V) -> Option<V>
     where
         K: Ord,
@@ -70,9 +103,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
                 ))
             }
             intrusive::InsertPosition::Vacant { parent, direction } => {
-                // SAFETY: Box::into_raw of a fresh allocation is never null.
-                let node = unsafe { Node::<K, V>::leak(key, value) }.expect("freshly leaked node");
-                // SAFETY: node is freshly leaked and unlinked; parent, if
+                let node = alloc::alloc_node(&self.root.alloc, key, value)
+                    .expect("node allocation failed");
+                // SAFETY: node is freshly allocated and unlinked; parent, if
                 // any, is exactly what find_insert_position just returned.
                 unsafe { self.root.link_vacant(node, parent, direction) };
                 self.len += 1;
@@ -108,15 +141,17 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     /// 1. You need to provide a non-null *mut Node<K, V>.
     /// 2. `node` will be dangling after this call.
     pub(crate) unsafe fn pop_node(&mut self, node: *mut Node<K, V>) -> (K, V) {
-        // SAFETY: pop_node delegates the safety to the caller; he needs to guarantee a non null ptr.
-        let mut node = unsafe { Node::<K, V>::unleak(node) };
-        let victim = node.as_mut();
+        // SAFETY: the caller guarantees `node` is a live node of this tree.
+        let mut node = NonNull::new(node).expect("pop_node: null node");
+        // SAFETY: `node` is live; `erase` only unlinks it, the memory stays valid.
+        let victim = unsafe { node.as_mut() };
         self.root.erase(victim);
         self.len -= 1;
         if self.leftmost == victim.into() {
             self.leftmost = victim.next();
         }
-        (node.key, node.value)
+        // SAFETY: `node` is now unlinked from the tree and solely owned here.
+        unsafe { alloc::take_node(&self.root.alloc, node) }
     }
 
     pub fn remove<Q>(&mut self, key: &Q) -> Option<(K, V)>
@@ -130,7 +165,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     }
 }
 
-impl<K, V, C> CachedTree<K, V, C>
+impl<K, V, C, A: Allocator> CachedTree<K, V, C, A>
 where
     K: Ord,
 {
@@ -143,17 +178,17 @@ where
     /// existing patterns. The returned node, if Some, is properly initialized
     /// and ready to be assigned to root.node.
     fn build_from_sorted_impl(
-        _tree: &mut Self,
+        alloc: &A,
         items: impl Iterator<Item = (K, V)>,
         count: usize,
-    ) -> Option<std::ptr::NonNull<Node<K, V>>> {
+    ) -> Option<NonNull<Node<K, V>>> {
         if count == 0 {
             return None;
         }
 
         // Build recursively in a way that creates a complete binary tree
         let mut iter = items.peekable();
-        Self::build_recursive(&mut iter, count, std::ptr::null_mut()).map(|mut root| {
+        Self::build_recursive(alloc, &mut iter, count, std::ptr::null_mut()).map(|mut root| {
             // Root is always black in RB-trees
             unsafe { root.as_mut() }.set_color(Color::Black);
             root
@@ -168,10 +203,11 @@ where
     /// Returns a properly linked subtree with parent pointers set.
     /// The returned node is safe to dereference and has allocated children.
     fn build_recursive<I>(
+        alloc: &A,
         iter: &mut std::iter::Peekable<I>,
         count: usize,
         parent: *mut Node<K, V>,
-    ) -> Option<std::ptr::NonNull<Node<K, V>>>
+    ) -> Option<NonNull<Node<K, V>>>
     where
         I: Iterator<Item = (K, V)>,
     {
@@ -191,11 +227,11 @@ where
         };
 
         // Build left subtree (will be filled by iterator order)
-        let left_subtree = Self::build_recursive(iter, left_count, parent);
+        let left_subtree = Self::build_recursive(alloc, iter, left_count, parent);
 
         // Allocate current node
         let (key, value) = iter.next()?;
-        let mut node = unsafe { Node::<K, V>::leak(key, value) }?;
+        let mut node = alloc::alloc_node(alloc, key, value)?;
 
         // SAFETY: node is non-null by the above check
         {
@@ -212,7 +248,7 @@ where
 
         // Build right subtree
         let right_count = count - left_count - 1;
-        let right_subtree = Self::build_recursive(iter, right_count, node.as_ptr());
+        let right_subtree = Self::build_recursive(alloc, iter, right_count, node.as_ptr());
         unsafe { node.as_mut() }.set_right(right_subtree);
         // Set right child's parent
         if let Some(mut right) = right_subtree {
@@ -223,7 +259,7 @@ where
     }
 }
 
-impl<K, V, C> CachedTree<K, V, C> {
+impl<K, V, C, A: Allocator> CachedTree<K, V, C, A> {
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q> + Ord,
@@ -313,7 +349,8 @@ impl<K, V, C> CachedTree<K, V, C> {
     }
 }
 
-impl<K, Q: ?Sized, V, C: TreeCallbacks<Key = K, Value = V>> Index<&Q> for CachedTree<K, V, C>
+impl<K, Q: ?Sized, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Index<&Q>
+    for CachedTree<K, V, C, A>
 where
     K: Borrow<Q> + Ord,
     Q: Ord,
@@ -331,7 +368,7 @@ where
     }
 }
 
-impl<K, V, C> Drop for CachedTree<K, V, C> {
+impl<K, V, C, A: Allocator> Drop for CachedTree<K, V, C, A> {
     fn drop(&mut self) {
         // SAFETY: we're literally in drop.
         unsafe {
@@ -341,7 +378,7 @@ impl<K, V, C> Drop for CachedTree<K, V, C> {
 }
 
 #[cfg(debug_assertions)]
-impl<K, V, C> CachedTree<K, V, C>
+impl<K, V, C, A: Allocator> CachedTree<K, V, C, A>
 where
     K: std::fmt::Debug,
 {
@@ -351,7 +388,7 @@ where
     }
 }
 
-impl<K, V, C> std::fmt::Debug for CachedTree<K, V, C>
+impl<K, V, C, A: Allocator> std::fmt::Debug for CachedTree<K, V, C, A>
 where
     K: std::fmt::Debug,
     V: std::fmt::Debug,
@@ -362,81 +399,79 @@ where
     }
 }
 
-impl<K: PartialEq, V: PartialEq, C: PartialEq> PartialEq for CachedTree<K, V, C> {
-    fn eq(&self, other: &CachedTree<K, V, C>) -> bool {
+impl<K: PartialEq, V: PartialEq, C: PartialEq, A: Allocator> PartialEq for CachedTree<K, V, C, A> {
+    fn eq(&self, other: &CachedTree<K, V, C, A>) -> bool {
         self.len() == other.len()
             && self.root.callbacks == other.root.callbacks
             && self.iter().zip(other.iter()).all(|(a, b)| a == b)
     }
 }
 
-impl<K, V, C> Clone for CachedTree<K, V, C>
+impl<K, V, C, A> Clone for CachedTree<K, V, C, A>
 where
     K: Clone + Ord,
     V: Clone,
     C: Clone + TreeCallbacks<Key = K, Value = V>,
+    A: Allocator + Default,
 {
+    /// Clones the tree into a fresh `A::default()` allocator, rebuilt bottom-up
+    /// in O(n).
     fn clone(&self) -> Self {
-        if self.is_empty() {
-            CachedTree {
-                leftmost: None,
-                len: 0,
-                root: self.root.clone(),
-            }
-        } else {
-            let mut tree = CachedTree {
-                leftmost: None,
-                len: 0,
-                root: Root {
-                    callbacks: self.root.callbacks.clone(),
-                    node: None,
-                },
-            };
+        let mut tree = CachedTree {
+            leftmost: None,
+            len: 0,
+            root: Root::new_in(self.root.callbacks.clone(), A::default()),
+        };
+        if !self.is_empty() {
             // Build from sorted elements in O(n) time using bottom-up construction
             let items: Vec<_> = self.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             let len = items.len();
             if let Some(root) =
-                CachedTree::build_from_sorted_impl(&mut tree, items.into_iter(), len)
+                Self::build_from_sorted_impl(&tree.root.alloc, items.into_iter(), len)
             {
                 tree.root.node = Some(root);
                 tree.len = len;
                 // Cache the leftmost node (first element in in-order traversal)
                 tree.leftmost = tree.root.first();
             }
-            tree
         }
+        tree
     }
 }
 
-impl<K: PartialOrd, V: PartialOrd, C: PartialOrd> PartialOrd for CachedTree<K, V, C> {
+impl<K: PartialOrd, V: PartialOrd, C: PartialOrd, A: Allocator> PartialOrd
+    for CachedTree<K, V, C, A>
+{
     #[inline]
-    fn partial_cmp(&self, other: &CachedTree<K, V, C>) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &CachedTree<K, V, C, A>) -> Option<Ordering> {
         self.iter().partial_cmp(other.iter())
     }
 }
 
-impl<K: Eq, V: Eq, C: Eq> Eq for CachedTree<K, V, C> {}
+impl<K: Eq, V: Eq, C: Eq, A: Allocator> Eq for CachedTree<K, V, C, A> {}
 
-impl<K: Ord, V: Ord, C: Ord> Ord for CachedTree<K, V, C> {
+impl<K: Ord, V: Ord, C: Ord, A: Allocator> Ord for CachedTree<K, V, C, A> {
     #[inline]
-    fn cmp(&self, other: &CachedTree<K, V, C>) -> Ordering {
+    fn cmp(&self, other: &CachedTree<K, V, C, A>) -> Ordering {
         self.iter().cmp(other.iter())
     }
 }
 
-unsafe impl<K, V, C> Send for CachedTree<K, V, C>
+unsafe impl<K, V, C, A> Send for CachedTree<K, V, C, A>
 where
     K: Send,
     V: Send,
     C: Send,
+    A: Allocator + Send,
 {
 }
 
-unsafe impl<K, V, C> Sync for CachedTree<K, V, C>
+unsafe impl<K, V, C, A> Sync for CachedTree<K, V, C, A>
 where
     K: Sync,
     V: Sync,
     C: Sync,
+    A: Allocator + Sync,
 {
 }
 

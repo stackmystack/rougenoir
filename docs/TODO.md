@@ -11,7 +11,9 @@
 
 ### Good to have maybe
 
-1. Alloc API
+1. ~~Alloc API~~ — done, see [allocators.md](allocators.md).
+1. `Tree::compact()` / traversal-order bulk rebuild (Family C in
+   [allocation-research.md](allocation-research.md)).
 
 ## Tree
 

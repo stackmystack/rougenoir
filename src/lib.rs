@@ -1,5 +1,7 @@
 //! A red-black (rouge-noir) tree translated from the linux kernel's implementation of red-black trees.
-mod alloc;
+#![cfg_attr(feature = "nightly", feature(allocator_api))]
+
+pub mod alloc;
 mod cached_tree;
 pub mod intrusive;
 mod iter;
@@ -13,6 +15,7 @@ use std::{
     ptr::{self, NonNull},
 };
 
+use alloc::Allocator;
 use intrusive::{Adapter, Link};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -238,24 +241,34 @@ impl<K, V> TreeCallbacks for Noop<K, V> {
 /// T is the type of the data stored in the tree.
 /// A is the Augmented Callback type.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Root<K, V, C> {
+pub struct Root<K, V, C, A = crate::alloc::Global> {
     pub callbacks: C,
     pub node: NodePtr<Node<K, V>>,
+    pub alloc: A,
 }
 
-pub struct Tree<K, V, C> {
+pub struct Tree<K, V, C, A = crate::alloc::Global>
+where
+    A: Allocator,
+{
     len: usize,
-    root: Root<K, V, C>,
+    root: Root<K, V, C, A>,
 }
 
-pub struct CachedTree<K, V, C> {
+pub struct CachedTree<K, V, C, A = crate::alloc::Global>
+where
+    A: Allocator,
+{
     leftmost: NodePtr<Node<K, V>>,
     len: usize,
-    root: Root<K, V, C>,
+    root: Root<K, V, C, A>,
 }
 
-pub struct Set<T, C> {
-    tree: Tree<T, (), C>,
+pub struct Set<T, C, A = crate::alloc::Global>
+where
+    A: Allocator,
+{
+    tree: Tree<T, (), C, A>,
 }
 
 impl<K, V> Node<K, V> {
@@ -266,30 +279,35 @@ impl<K, V> Node<K, V> {
     where
         K: Ord,
     {
-        unsafe { alloc::leak_alloc_node(key, value) }
+        alloc::alloc_node(&alloc::Global, key, value)
     }
 
     /// # Safety
     ///
     /// It drops; use after alloc_node.
     pub unsafe fn unleak(current: *mut Node<K, V>) -> Box<Node<K, V>> {
-        unsafe { alloc::own_back(current) }
+        // SAFETY: delegated to the caller. A `Global` node is a plain
+        // `std::alloc` allocation, so `Box::from_raw` owns it correctly.
+        unsafe { Box::from_raw(current) }
     }
 }
 
-impl<K, V, C> Root<K, V, C> {
+impl<K, V, C, A> Root<K, V, C, A> {
     /// # SAFETY
     ///
     /// It drops all nodes from the root.
     /// Pass len = 0 if you're unsure of the length of the # of elements in
     /// your tree.
-    pub unsafe fn dealloc(root: &mut Root<K, V, C>, len: usize) {
+    pub unsafe fn dealloc(root: &mut Root<K, V, C, A>, len: usize)
+    where
+        A: Allocator,
+    {
         let mut parent = root.node;
         let mut direction = Vec::new();
         // max depth = 2 × log₂(n+1)
         let log_val = (len + 1).checked_ilog2().unwrap_or(0) as usize;
         direction.reserve(log_val.saturating_mul(2).max(4096));
-        while let Some(mut current) = parent {
+        while let Some(current) = parent {
             let current_ref = unsafe { current.as_ref() };
             if current_ref.left().is_some() {
                 parent = current_ref.left();
@@ -310,8 +328,9 @@ impl<K, V, C> Root<K, V, C> {
                     _ => {}
                 }
             }
-            // SAFETY: Now it's safe to drop
-            unsafe { Node::<K, V>::unleak(current.as_mut()) };
+            // SAFETY: `current` is a live node of this tree, now unlinked
+            // from its parent, and nothing else references it.
+            unsafe { alloc::drop_node(&root.alloc, current) };
         }
     }
 }

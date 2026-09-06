@@ -17,17 +17,34 @@ All common tasks are wired through `just` (see `justfile`); the underlying `carg
 - Test: `just test` (`cargo nextest run --tests --examples` + `cargo test --doc` — doctests don't run under nextest, so both are required)
 - Test the `examples/` folder specifically (compiles, unit-tests, and runs every example's `main`): `just test-examples`
 - Run a single test: `cargo nextest run <test_name>` (or `cargo nextest run -E 'test(<pattern>)'`)
-- Lint (must pass, matches CI): `just lint` = `clippy` + `fmt-check` + `typos`
+- Lint (must pass, matches CI): `just lint` = `clippy` + `clippy-features` + `fmt-check` + `typos`
   - `just clippy` → `cargo clippy --all --all-targets -- --deny warnings`
+  - `just clippy-features` → same, for `--no-default-features` and `--features slab,bumpalo,blink-alloc`
   - `just clippy-fix` — autofix if working dir is clean; `just clippy-fix-now` — autofix even if dirty
   - `just fmt` / `just fmt-check`
 - Typo check: `just typos` / `just typos-fix`
 - Miri (memory-safety check, required before considering unsafe changes done): `just miri` = `cargo +nightly miri nextest run --tests --examples` + `cargo +nightly miri test --doc`
 - Benchmarks (criterion): `just bench` (quick smoke run of rougenoir's own suite), `just bench-full` (whole matrix incl. the 1M out-of-cache size), `just bench-compare` (vs `std::collections::BTreeMap` and the `rbtree` crate). Regression workflow: `just bench-baseline <name>` before a change, `just bench-cmp <name>` after. See [docs/contributing.md](docs/contributing.md#benchmarking) for the full story — run modes, input shapes, and how to get stable numbers. Bare `cargo bench` (no `--bench`) currently fails to compile because the crate's unit-test target uses `debug_assertions`-gated helpers that vanish in release; the `just` targets sidestep it with explicit `--bench`.
 - Docs: `just doc` (`cargo doc --no-deps --open`)
-- One-time setup: `just setup` (installs `cargo-nextest`, `typos-cli`, and `miri`)
+- One-time setup: `just setup` (installs `cargo-nextest`, `typos-cli`, the `nightly` toolchain, and `miri`)
 
-CI (`just lint && just test-examples && just miri`) is the bar for any change — always run all three before considering work done, especially anything touching `unsafe` code or `examples/`.
+### Allocator features
+
+The collection layer (`Tree`/`CachedTree`/`Set`) picks its node backing store
+at compile time. The default (nothing enabled) is the historical leaked-`Box`
+behaviour (`alloc::Global`). Optional backends:
+
+- `slab` — `alloc::Slab`, a local slab-of-chunks pool (rougenoir's own code,
+  **not** the `slab` crate).
+- `bumpalo` / `blink-alloc` — adapters for `&bumpalo::Bump` / `&blink_alloc::BlinkAlloc`.
+- `nightly` — `alloc::Std<A>`, bridging any `core::alloc::Allocator`. Enables
+  `#![feature(allocator_api)]`, so it **requires `cargo +nightly`**.
+
+Targets that exercise them: `just test-features` (all stable backends),
+`just test-nightly` (+ the nightly bridge), `just miri-features`,
+`just miri-nightly`, `just clippy-features` (folded into `just lint`).
+
+CI (`just lint && just test-examples && just miri`) is the bar for any change — always run all three before considering work done, especially anything touching `unsafe` code or `examples/`. When a change touches the allocator layer, also run `just test-features` / `just test-nightly` and the matching `miri-*` targets.
 
 ## Architecture
 
@@ -43,7 +60,11 @@ CI (`just lint && just test-examples && just miri`) is the bar for any change �
 - **`src/cached_tree.rs`** — `CachedTree<K, V, C>`: like `Tree` but caches the leftmost (minimum) node pointer for O(1) `first()`.
 - **`src/set.rs`** — `Set<T, C>`: a thin wrapper around `Tree<T, (), C>`.
 - **`src/iter/`** — iterator implementations (`Iter`, `Keys`, `Values`, in-order/postorder cursors) split per collection: `iter/tree.rs`, `iter/cached_tree.rs`, `iter/set.rs`, `iter/node.rs` (shared traversal primitives).
-- **`src/alloc.rs`** — node allocation/deallocation (`leak_alloc_node`, `own_back`); nodes are boxed and leaked into raw pointers, owned back explicitly on drop/removal. There is currently no custom allocator (see "Nice to Have" in README) — this is the main place a future allocator API would plug in.
+- **`src/alloc/`** — the node backing store for `Tree`/`CachedTree`/`Set`.
+  - **`mod.rs`** — the `Allocator` trait (a type-erased subset of `core::alloc::Allocator`: `allocate(Layout)`/`deallocate`, `&self`, stable-address contract), `Global` (the default — `std::alloc::{alloc,dealloc}`, ≡ the old leaked `Box`), and the `pub(crate)` node helpers `alloc_node`/`drop_node`/`take_node` (the only place `Layout`/`cast`/`ptr::write` boilerplate lives). `crate::Root<K, V, C, A = Global>` carries the `alloc` and `Root::dealloc` frees through it; `intrusive::` never allocates and is untouched.
+  - **`slab.rs`** (`feature = "slab"`) — `Slab`, a local slab-of-chunks pool: cache-line-aligned chunks that never move, an intrusive free list through dead slots, geometric chunk growth. The recommended non-default backend.
+  - **`bumpalo.rs`** / **`blink.rs`** (`feature = "bumpalo"` / `"blink-alloc"`) — `unsafe impl Allocator for &Bump` / `&BlinkAlloc` via each crate's inherent `Layout` allocation; `deallocate` is a no-op (bump semantics — `remove` runs `Drop` but doesn't reclaim the slot; no `Clone`/`Default`/`clear`).
+  - **`nightly.rs`** (`feature = "nightly"`) — `Std<A>`, a wrapper bridging any `core::alloc::Allocator`. Enables `#![feature(allocator_api)]`, hence `cargo +nightly`.
 - **`examples/interval_tree.rs`** — a custom augmented interval tree built directly on `rougenoir::intrusive` (not `Tree`/`Node`): `IntervalNode<K, V>` embeds a `Link` and owns its own allocation/deallocation by hand, since the intrusive API never owns memory. Its `Adapter` is hand-written since `IntervalNode<K, V>` is generic.
 - **`examples/multi_index.rs`** — one `Employee` allocation embedding *two* `Link` fields, each in its own independent tree (`by_id`, `by_name`) via its own `intrusive_adapter!`-generated `Adapter` — the actual point of the offset-based `Adapter` design (one object, more than one intrusive tree membership, no extra allocation) over a simpler single-membership alternative that was considered and rejected for this crate.
 - **`benches/harness/mod.rs`** — shared benchmark scaffolding: the `Shape` enum (six insertion orders — ascending, descending, shuffled, random, adversarial/bit-reversal, duplicates), deterministic `ChaCha8`-seeded key generators (`keys(shape, n)` — every implementation under test sees the *identical* sequence), the geometric size ladder (`sizes()` — one point per cache regime, not a dense list of L2-resident sizes), and `configure()` (per-group throughput + sample counts scaled to size). Run mode comes from the environment: `BENCH_QUICK` / (none) / `BENCH_FULL`, plus `BENCH_SIZES=a,b,c` for a one-off. It's a *directory* module (`benches/harness/mod.rs`, `mod harness;`) because Cargo auto-discovers `benches/*.rs` as bench targets but not subdirectory files (and `autobenches = false` in `Cargo.toml` makes the `[[bench]]` list explicit).
@@ -57,6 +78,7 @@ CI (`just lint && just test-examples && just miri`) is the bar for any change �
 - Public safe API surface is `Tree`/`CachedTree`/`Set`. `Node`/`Root`/`TreeCallbacks` (the original, `Node<K, V>`-owning low-level API) and `rougenoir::intrusive::{Link, Adapter, Root, TreeCallbacks}` (the genuinely intrusive low-level API) are both intentionally exposed for building custom augmented structures — reach for `Node`/`Root` when the crate should own `K`/`V` and allocation, `intrusive` when you want to embed the tree link in your own struct and own allocation yourself.
 - A navigation/mutation primitive is public only if there's a real external consumer for it, and it's `unsafe fn` if its precondition ("points at a live `Link`/`Value`") isn't already enforced by the type system. `Link`'s read-navigation (`left`/`right`/`parent`/`next`/`prev`/`is_red`) and `Adapter`'s default methods meet that bar and are `pub`. `Link`'s mutating primitives (`set_left`, `set_right`, `set_parent`, ...) and the fluent, `None`-propagating `LinkPtrExt`/`LinkPtrMut` traits in `src/intrusive/node_ptr.rs` don't — using them directly instead of `Root::insert`/`erase` silently corrupts the tree — so they stay `pub(crate)`, engine-internal only.
 - Any `unsafe` block should carry a `// SAFETY:` comment justifying it (existing code follows this convention throughout the crate); match that style for new unsafe code.
+- The allocator parameter `A` is threaded as `Tree<K, V, C, A = Global>` (likewise `CachedTree`/`Set`/`crate::Root`). `Tree`/`CachedTree`/`Set` carry a `where A: Allocator` **bound on the struct itself** (required — their `Drop` calls `Allocator` methods; matches `std::collections::BTreeMap`), so every impl repeats `A: Allocator`. `Clone`/`Default`/`FromIterator`/`clear` additionally need `A: Default` (they build into a *fresh* `A::default()`, so a `&Bump`-backed tree has none of them). New `Allocator` impls must honour the stable-address contract (never relocate a live allocation) and be Miri-clean; add a per-backend equivalence test against `Global`.
 - Changes to rebalancing must be made in **`src/intrusive/root.rs` only** — it's the sole copy of the kernel's Case 1–4 logic; `src/root.rs` delegates to it rather than reimplementing it. Validate any change with both the `validate()`/`validate_of()` invariant checker (used in property tests) and `just miri` — this is where most memory-safety risk in the crate concentrates.
 - Benchmark inputs are deterministic and shared: never introduce `thread_rng` or an unseeded RNG into `benches/`, and never generate a fresh key sequence per implementation inside a comparison — both defeat the point (comparing implementations on the same work, reproducibly). New shapes/ops go in `benches/harness/mod.rs` so both bench targets get them. Keep the size ladder geometric and regime-spanning, not dense.
 

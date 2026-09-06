@@ -242,17 +242,48 @@ table.)
 
 ### The lever
 
-Every rougenoir node is its own leaked `Box`. That one fact accounts for
-most of the distance to `BTreeMap` on random-access workloads; a pooled or
-bump allocator (see [_Nice to Have_](#nice-to-have)) is where the real
-speed-up waits.
+By default every rougenoir node is its own leaked `Box`. That one fact
+accounts for most of the distance to `BTreeMap` on random-access workloads —
+so the node backing store is a compile-time choice (see
+[Allocators](#allocators)).
+
+## Allocators
+
+`Tree`/`CachedTree`/`Set` take an allocator type parameter,
+`Tree<K, V, C, A = Global>`. The default `Global` is the historical
+leaked-`Box` behaviour (and honours any `#[global_allocator]`). Opt into a
+different backing store with a cargo feature and `*_in` constructor:
+
+| feature | type | reclaims on `remove`? | notes |
+| --- | --- | --- | --- |
+| *(default)* | `alloc::Global` | yes | `std::alloc`; unchanged behaviour |
+| `slab` | `alloc::Slab` | yes | local slab-of-chunks pool + free list; cache-line-aligned chunks that never move |
+| `bumpalo` | `&bumpalo::Bump` | no (freed on arena reset/drop) | pointer-bump; no `Clone`/`Default`/`clear` |
+| `blink-alloc` | `&blink_alloc::BlinkAlloc` | no (freed on arena reset/drop) | as `bumpalo` |
+| `nightly` | `alloc::Std<A>` | per `A` | bridges any `core::alloc::Allocator`; needs `cargo +nightly` |
+
+```rust
+use rougenoir::{Tree, alloc::Slab};
+
+let mut tree: Tree<u64, u64, _, Slab> = Tree::new_in(Slab::new());
+tree.insert(1, 10);
+```
+
+```rust
+let bump = bumpalo::Bump::new();
+let mut tree = rougenoir::Tree::new_in(&bump);
+tree.insert(1, "one");
+// nodes live in `bump`; `remove` runs the entry's `Drop` but the slot
+// is only reclaimed when `bump` is reset or dropped.
+```
+
+Every backend must (and does) keep node addresses stable for the life of the
+node — `remove` never invalidates other nodes' pointers. A non-reclaiming
+backend still runs each entry's `Drop` on removal and on tree drop; only the
+raw slot lingers until the arena is reset.
 
 ## Nice to Have
 
-- Custom allocator.
-  - Currently every node is its own leaked `Box` — the [Benchmarks](#benchmarks)
-    show this is the dominant cost on random-access workloads.
-  - I'm thinking of [`hashbrown`](https://github.com/rust-lang/hashbrown).
 - Concurrency.
   - AFAICT the kernel's implementation allows for lock-free concurrency.
   - I'm not a linux expert, so I might be wrong.

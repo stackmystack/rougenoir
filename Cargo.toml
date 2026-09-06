@@ -8,6 +8,21 @@ name = "rougenoir"
 version = "0.1.0"
 
 [dependencies]
+bumpalo = { version = "3", optional = true }
+blink-alloc = { version = "0.3", optional = true }
+
+[features]
+default = []
+# A local slab-of-chunks pool allocator (`rougenoir::alloc::Slab`). This is
+# rougenoir's own implementation — it does *not* pull in the `slab` crate.
+slab = []
+# Adapter for `&bumpalo::Bump` as a node backing store.
+bumpalo = ["dep:bumpalo"]
+# Adapter for `&blink_alloc::BlinkAlloc` as a node backing store.
+blink-alloc = ["dep:blink-alloc"]
+# Bridge any `core::alloc::Allocator` in via `rougenoir::alloc::Std`. Needs a
+# nightly toolchain (`cargo +nightly …`) because it enables `allocator_api`.
+nightly = []
 
 [dev-dependencies]
 criterion = "0.6"

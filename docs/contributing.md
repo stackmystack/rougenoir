@@ -25,7 +25,7 @@
 1. [`cargo-nextest`](https://nexte.st/), to run the tests.
 1. [`just`](https://just.systems/man/en/), to run common tasks.
 1. [`miri`](https://github.com/rust-lang/miri), for memory safety analysis.
-1. [`rust nightly`](https://rust-lang.github.io/rustup/concepts/channels.html), to run `miri`.
+1. [`rust nightly`](https://rust-lang.github.io/rustup/concepts/channels.html), to run `miri` and to build the `nightly` allocator feature (`cargo +nightly … --features nightly`).
 1. [`typos-cli`](https://github.com/crate-ci/typos), for spell checking.
 
 ### Installation Procedure

@@ -4,9 +4,13 @@ use std::{
     ptr::{self},
 };
 
-use crate::{Node, NodeAdapter, Tree, TreeCallbacks, intrusive::RawIter};
+use crate::{
+    Node, NodeAdapter, Tree, TreeCallbacks,
+    alloc::{Allocator, Global},
+    intrusive::RawIter,
+};
 
-impl<K, V, C> Tree<K, V, C> {
+impl<K, V, C, A: Allocator> Tree<K, V, C, A> {
     /// Gets an iterator over the keys of the map, in sorted order.
     ///
     /// # Examples
@@ -128,7 +132,7 @@ impl<K, V, C> Tree<K, V, C> {
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Tree<K, V, C, A> {
     /// Creates an iterator that visits all elements (key-value pairs) in
     /// ascending key order and uses a closure to determine if an element should
     /// be removed. If the closure returns `true`, the element is removed from
@@ -157,7 +161,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     /// assert_eq!(evens.keys().copied().collect::<Vec<_>>(), [0, 2, 4, 6]);
     /// assert_eq!(odds.keys().copied().collect::<Vec<_>>(), [1, 3, 5, 7]);
     /// ```
-    pub fn extract_if<F>(&mut self, pred: F) -> ExtractIf<'_, K, V, C, F>
+    pub fn extract_if<F>(&mut self, pred: F) -> ExtractIf<'_, K, V, C, A, F>
     where
         K: Ord,
         F: FnMut(&K, &V) -> bool,
@@ -186,7 +190,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     /// assert_eq!(keys, [1, 2]);
     /// ```
     #[inline]
-    pub fn into_keys(self) -> IntoKeys<K, V, C> {
+    pub fn into_keys(self) -> IntoKeys<K, V, C, A> {
         IntoKeys {
             inner: self.into_iter(),
         }
@@ -209,7 +213,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     /// assert_eq!(values, ["hello", "goodbye"]);
     /// ```
     #[inline]
-    pub fn into_values(self) -> IntoValues<K, V, C> {
+    pub fn into_values(self) -> IntoValues<K, V, C, A> {
         IntoValues {
             inner: self.into_iter(),
         }
@@ -240,9 +244,9 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     }
 }
 
-pub struct IntoIter<K, V, C>(Tree<K, V, C>);
+pub struct IntoIter<K, V, C, A: Allocator = Global>(Tree<K, V, C, A>);
 
-impl<K, V, C> IntoIter<K, V, C> {
+impl<K, V, C, A: Allocator> IntoIter<K, V, C, A> {
     /// Returns an iterator of references over the remaining items.
     #[inline]
     #[allow(dead_code)]
@@ -257,17 +261,17 @@ impl<K, V, C> IntoIter<K, V, C> {
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> IntoIterator for Tree<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> IntoIterator for Tree<K, V, C, A> {
     type Item = (K, V);
-    type IntoIter = IntoIter<K, V, C>;
+    type IntoIter = IntoIter<K, V, C, A>;
 
     /// Gets an owning iterator over the entries of the map, sorted by key.
-    fn into_iter(self) -> IntoIter<K, V, C> {
+    fn into_iter(self) -> IntoIter<K, V, C, A> {
         IntoIter(self)
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoIter<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Iterator for IntoIter<K, V, C, A> {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<(K, V)> {
@@ -297,26 +301,35 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoIter<K, V, C> 
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> DoubleEndedIterator for IntoIter<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> DoubleEndedIterator
+    for IntoIter<K, V, C, A>
+{
     fn next_back(&mut self) -> Option<Self::Item> {
         self.0.pop_last()
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> ExactSizeIterator for IntoIter<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> ExactSizeIterator
+    for IntoIter<K, V, C, A>
+{
     fn len(&self) -> usize {
         self.0.len
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> FusedIterator for IntoIter<K, V, C> {}
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> FusedIterator
+    for IntoIter<K, V, C, A>
+{
+}
 
 pub struct Iter<'a, K, V> {
     inner: RawIter<NodeAdapter<K, V>>,
     phantom: PhantomData<(&'a K, &'a V)>,
 }
 
-impl<'a, K, V, C: TreeCallbacks<Key = K, Value = V>> IntoIterator for &'a Tree<K, V, C> {
+impl<'a, K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> IntoIterator
+    for &'a Tree<K, V, C, A>
+{
     type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
 
@@ -392,7 +405,7 @@ pub struct IterMut<'a, K, V> {
     phantom: PhantomData<(&'a K, &'a V)>,
 }
 
-impl<'a, K, V, C> IntoIterator for &'a mut Tree<K, V, C> {
+impl<'a, K, V, C, A: Allocator> IntoIterator for &'a mut Tree<K, V, C, A> {
     type Item = (&'a K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
 
@@ -463,7 +476,9 @@ impl<K, V> Clone for IterMut<'_, K, V> {
     }
 }
 
-impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V>> Extend<(K, V)> for Tree<K, V, C> {
+impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Extend<(K, V)>
+    for Tree<K, V, C, A>
+{
     #[inline]
     fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
         iter.into_iter().for_each(move |(k, v)| {
@@ -472,8 +487,8 @@ impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V>> Extend<(K, V)> for Tree<K,
     }
 }
 
-impl<'a, K: Ord + Copy, V: Copy, C: TreeCallbacks<Key = K, Value = V>> Extend<(&'a K, &'a V)>
-    for Tree<K, V, C>
+impl<'a, K: Ord + Copy, V: Copy, C: TreeCallbacks<Key = K, Value = V>, A: Allocator>
+    Extend<(&'a K, &'a V)> for Tree<K, V, C, A>
 {
     #[inline]
     fn extend<I: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: I) {
@@ -521,8 +536,8 @@ pub struct ValuesMut<'a, K, V> {
 ///
 /// [`into_keys`]: Tree::into_keys
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct IntoKeys<K, V, C: TreeCallbacks<Key = K, Value = V>> {
-    inner: IntoIter<K, V, C>,
+pub struct IntoKeys<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator = Global> {
+    inner: IntoIter<K, V, C, A>,
 }
 
 /// An owning iterator over the values of a `Tree`.
@@ -532,8 +547,8 @@ pub struct IntoKeys<K, V, C: TreeCallbacks<Key = K, Value = V>> {
 ///
 /// [`into_values`]: Tree::into_keys
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct IntoValues<K, V, C: TreeCallbacks<Key = K, Value = V>> {
-    inner: IntoIter<K, V, C>,
+pub struct IntoValues<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator = Global> {
+    inner: IntoIter<K, V, C, A>,
 }
 
 impl<'a, K, V> Iterator for Keys<'a, K, V> {
@@ -656,7 +671,7 @@ impl<K, V> ExactSizeIterator for ValuesMut<'_, K, V> {
 
 impl<K, V> FusedIterator for ValuesMut<'_, K, V> {}
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoKeys<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Iterator for IntoKeys<K, V, C, A> {
     type Item = K;
 
     fn next(&mut self) -> Option<K> {
@@ -686,21 +701,28 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoKeys<K, V, C> 
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> DoubleEndedIterator for IntoKeys<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> DoubleEndedIterator
+    for IntoKeys<K, V, C, A>
+{
     fn next_back(&mut self) -> Option<K> {
         self.inner.next_back().map(|(k, _)| k)
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> ExactSizeIterator for IntoKeys<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> ExactSizeIterator
+    for IntoKeys<K, V, C, A>
+{
     fn len(&self) -> usize {
         self.inner.len()
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> FusedIterator for IntoKeys<K, V, C> {}
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> FusedIterator
+    for IntoKeys<K, V, C, A>
+{
+}
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoValues<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> Iterator for IntoValues<K, V, C, A> {
     type Item = V;
 
     fn next(&mut self) -> Option<V> {
@@ -716,33 +738,37 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Iterator for IntoValues<K, V, C
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> DoubleEndedIterator for IntoValues<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> DoubleEndedIterator
+    for IntoValues<K, V, C, A>
+{
     fn next_back(&mut self) -> Option<V> {
         self.inner.next_back().map(|(_, v)| v)
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> ExactSizeIterator for IntoValues<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> ExactSizeIterator
+    for IntoValues<K, V, C, A>
+{
     fn len(&self) -> usize {
         self.inner.len()
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> FusedIterator for IntoValues<K, V, C> {}
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A: Allocator> FusedIterator
+    for IntoValues<K, V, C, A>
+{
+}
 
-impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V> + Default> FromIterator<(K, V)>
-    for Tree<K, V, C>
+impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V> + Default, A: Allocator + Default>
+    FromIterator<(K, V)> for Tree<K, V, C, A>
 {
     /// Constructs a `Tree<K, V>` from an iterator of key-value pairs.
     ///
     /// If the iterator produces any pairs with equal keys,
     /// all but one of the corresponding values will be dropped.
-    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Tree<K, V, C> {
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Tree<K, V, C, A> {
         let inputs: Vec<_> = iter.into_iter().collect();
-        if inputs.is_empty() {
-            return Tree::with_callbacks(Default::default());
-        }
-        let mut res = Tree::with_callbacks(Default::default());
+        let mut res = Tree::with_callbacks_in(Default::default(), A::default());
         for (k, v) in inputs {
             res.insert(k, v);
         }
@@ -750,20 +776,22 @@ impl<K: Ord, V, C: TreeCallbacks<Key = K, Value = V> + Default> FromIterator<(K,
     }
 }
 
-pub struct ExtractIf<'a, K, V, C, F>
+pub struct ExtractIf<'a, K, V, C, A, F>
 where
     C: TreeCallbacks<Key = K, Value = V>,
+    A: Allocator,
     F: 'a + FnMut(&K, &V) -> bool,
 {
     pred: F,
-    tree: &'a mut Tree<K, V, C>,
+    tree: &'a mut Tree<K, V, C, A>,
     next: *const Node<K, V>,
 }
 
-impl<'a, K, V, C, F> Iterator for ExtractIf<'a, K, V, C, F>
+impl<'a, K, V, C, A, F> Iterator for ExtractIf<'a, K, V, C, A, F>
 where
     K: Ord,
     C: TreeCallbacks<Key = K, Value = V>,
+    A: Allocator,
     F: 'a + FnMut(&K, &V) -> bool,
 {
     type Item = (K, V);

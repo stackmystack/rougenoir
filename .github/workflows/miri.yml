@@ -10,7 +10,7 @@ jobs:
   build:
     name: miri
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     defaults:
       run:
@@ -49,3 +49,5 @@ jobs:
           tool: cargo-nextest,just
 
       - run: just miri
+      - run: just miri-features
+      - run: just miri-nightly

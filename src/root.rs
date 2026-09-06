@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, marker::PhantomData, ptr::NonNull};
 
-use crate::{ComingFrom, intrusive};
+use crate::{ComingFrom, alloc::Global, intrusive};
 
 use super::{Node, NodeAdapter, NodePtr, Root, TreeCallbacks};
 
@@ -38,18 +38,27 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> intrusive::TreeCallbacks
     }
 }
 
-impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default> Default for Root<K, V, C> {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V> + Default, A: Default> Default
+    for Root<K, V, C, A>
+{
     fn default() -> Self {
-        Root::new(C::default())
+        Root::new_in(C::default(), A::default())
+    }
+}
+
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C, Global> {
+    pub fn new(augmented: C) -> Self {
+        Root::new_in(augmented, Global)
     }
 }
 
 // Public
-impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
-    pub fn new(augmented: C) -> Self {
+impl<K, V, C: TreeCallbacks<Key = K, Value = V>, A> Root<K, V, C, A> {
+    pub fn new_in(augmented: C, alloc: A) -> Self {
         Root {
             node: None,
             callbacks: augmented,
+            alloc,
         }
     }
 
@@ -127,7 +136,7 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
 }
 
 #[cfg(debug_assertions)]
-impl<K, V, C> Root<K, V, C>
+impl<K, V, C, A> Root<K, V, C, A>
 where
     K: std::fmt::Debug,
 {
@@ -136,7 +145,7 @@ where
     }
 }
 
-impl<K, V, C> Root<K, V, C> {
+impl<K, V, C, A> Root<K, V, C, A> {
     pub fn first(&self) -> NodePtr<Node<K, V>> {
         intrusive::first_of(self.node.map(Node::link_ptr)).map(Node::from_link)
     }

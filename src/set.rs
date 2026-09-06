@@ -1,6 +1,9 @@
 use std::borrow::Borrow;
 
-use crate::{Noop, Set, Tree, TreeCallbacks};
+use crate::{
+    Noop, Set, Tree, TreeCallbacks,
+    alloc::{Allocator, Global},
+};
 
 impl<T> Set<T, Noop<T, ()>> {
     pub fn new() -> Self {
@@ -8,16 +11,37 @@ impl<T> Set<T, Noop<T, ()>> {
     }
 }
 
-impl<T, C: TreeCallbacks<Key = T, Value = ()> + Default> Default for Set<T, C> {
-    fn default() -> Self {
-        Self::with_callbacks(C::default())
+impl<T, A: Allocator> Set<T, Noop<T, ()>, A> {
+    /// Creates an empty `Set` whose nodes are allocated from `alloc`.
+    pub fn new_in(alloc: A) -> Self {
+        Self {
+            tree: Tree::new_in(alloc),
+        }
     }
 }
 
-impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C> {
+impl<T, C: TreeCallbacks<Key = T, Value = ()> + Default, A: Allocator + Default> Default
+    for Set<T, C, A>
+{
+    fn default() -> Self {
+        Self::with_callbacks_in(C::default(), A::default())
+    }
+}
+
+impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C, Global> {
     pub fn with_callbacks(augmented: C) -> Self {
         Self {
             tree: Tree::with_callbacks(augmented),
+        }
+    }
+}
+
+impl<T, C: TreeCallbacks<Key = T, Value = ()>, A: Allocator> Set<T, C, A> {
+    /// Creates an empty `Set` with the given augmentation callbacks, whose
+    /// nodes are allocated from `alloc`.
+    pub fn with_callbacks_in(augmented: C, alloc: A) -> Self {
+        Self {
+            tree: Tree::with_callbacks_in(augmented, alloc),
         }
     }
 }
@@ -28,7 +52,7 @@ impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C> {
 //     }
 // }
 
-impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C> {
+impl<T, C: TreeCallbacks<Key = T, Value = ()>, A: Allocator> Set<T, C, A> {
     pub fn insert(&mut self, key: T) -> bool
     where
         T: Ord,
@@ -53,7 +77,7 @@ impl<T, C: TreeCallbacks<Key = T, Value = ()>> Set<T, C> {
     }
 }
 
-impl<T, C> Set<T, C> {
+impl<T, C, A: Allocator> Set<T, C, A> {
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         T: Borrow<Q> + Ord,
