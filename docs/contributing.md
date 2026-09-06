@@ -75,7 +75,8 @@ The suite lives in `benches/` and runs on [criterion](https://bheisler.github.io
 benches/
 ├── harness/mod.rs   shared: input shapes, key generators, size ladder, criterion config
 ├── rougenoir.rs     the regression suite — rougenoir's own types only
-└── compare.rs       rougenoir vs std::collections::BTreeMap vs the rbtree crate
+├── compare.rs       rougenoir vs std::collections::BTreeMap vs the rbtree crate
+└── allocators.rs    rougenoir's tree across node backing stores (Global/Slab/bumpalo/blink-alloc)
 ```
 
 ### Running
@@ -86,6 +87,7 @@ benches/
 | `just bench-rougenoir` | Default: 3 sizes up to 64k, all 6 shapes. | a few minutes |
 | `just bench-full` | Whole matrix incl. the 1M out-of-cache size. `BENCH_FULL=1`. | tens of minutes |
 | `just bench-compare` | rougenoir vs `BTreeMap` vs `rbtree`. | a few minutes |
+| `just bench-allocators` | rougenoir's tree on `Global` vs `Slab` vs `bumpalo` vs `blink-alloc` (needs `--features slab,bumpalo,blink-alloc`, which the target passes). | a few minutes |
 | `just bench-baseline <name>` | Full run, saved under `<name>` (do this *before* a change). | |
 | `just bench-cmp <name>` | Full run, diffed against `<name>` (do this *after*). | |
 

@@ -52,6 +52,10 @@ bench-full *args:
 bench-compare *args:
   cargo bench --bench compare {{args}}
 
+# rougenoir's tree across node backing stores: Global vs Slab vs bumpalo vs blink-alloc.
+bench-allocators *args:
+  cargo bench --bench allocators --features {{stable_features}} {{args}}
+
 # Record the current numbers under a name (run before a change).
 bench-baseline name:
   BENCH_FULL=1 cargo bench --bench rougenoir -- --save-baseline {{name}}

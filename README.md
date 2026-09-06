@@ -118,7 +118,8 @@ See the [multi-index example](examples/multi_index.rs).
 
 A criterion suite lives in [`benches/`](benches/): `just bench` for a quick
 smoke run, `just bench-full` for the whole matrix, `just bench-compare` to
-race the alternatives. Method, input shapes and run modes are documented in
+race the alternatives, `just bench-allocators` to race the node backing
+stores. Method, input shapes and run modes are documented in
 [docs/contributing.md](docs/contributing.md#benchmarking).
 
 ### The machine
@@ -240,12 +241,42 @@ extra work barely shows against the per-node allocation. (These use a
 12-byte value, so the absolute numbers run above the `u64`-value insert
 table.)
 
-### The lever
+### Node backing store
 
-By default every rougenoir node is its own leaked `Box`. That one fact
-accounts for most of the distance to `BTreeMap` on random-access workloads —
-so the node backing store is a compile-time choice (see
-[Allocators](#allocators)).
+By default every rougenoir node is its own leaked `Box`; the backing store
+is a compile-time choice (see [Allocators](#allocators)). Numbers below are
+`just bench-allocators` at `BENCH_PRECISE`, same machine as above.
+
+**insert** — build from empty (ns/key)
+
+| n     | order     | `Global` | `Slab` | `bumpalo` | `blink-alloc` |
+| ----- | --------- | -------: | -----: | --------: | ------------: |
+| 4 Ki  | ascending |       57 |     40 |        38 |            37 |
+| 4 Ki  | random    |      123 |     98 |        94 |            93 |
+| 64 Ki | ascending |      118 |     69 |        77 |            57 |
+| 64 Ki | random    |      206 |    176 |       173 |           172 |
+
+**drop** — tear the whole tree down (ns/element)
+
+| n     | `Global` | `Slab` | `bumpalo` | `blink-alloc` |
+| ----- | -------: | -----: | --------: | ------------: |
+| 4 Ki  |       37 |     11 |        11 |            11 |
+| 64 Ki |       45 |     20 |        19 |            19 |
+
+`Global` pays a `malloc` per insert and a `free` per node at teardown; a
+pool or bump arena drops both to near zero (the ~19 ns floor on `drop` is
+the tree walk itself). Insert is **1.2–2× faster**, drop **~2.3× faster**.
+
+**get / iter / churn** move far less — ~5 % on reads, ~15 % on a
+`pop_first`+`insert` churn loop at 64 Ki. A pool gives *temporal* locality
+(nodes sit in insertion order), and for a tree built from a shuffled stream
+that is not key order, so a key-ordered walk or a random lookup still hops.
+Closing that needs a compacting rebuild — see the
+[research notes](docs/allocation-research.md) (Family C), not yet built.
+
+> `bumpalo`/`blink-alloc` never reclaim a slot mid-life, so a long-running
+> churn workload grows the arena unboundedly; `Slab` recycles through a free
+> list. Pick the arena for build-then-drop, `Slab` for a long-lived map.
 
 ## Allocators
 

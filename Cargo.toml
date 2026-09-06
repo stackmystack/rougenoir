@@ -53,3 +53,10 @@ harness = false
 [[bench]]
 name = "compare"
 harness = false
+
+# rougenoir's tree across node backing stores (`Global`/`Slab`/`bumpalo`/
+# `blink-alloc`). Needs the allocator features; run via `just bench-allocators`.
+[[bench]]
+name = "allocators"
+harness = false
+required-features = ["slab", "bumpalo", "blink-alloc"]
