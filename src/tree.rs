@@ -12,7 +12,7 @@ impl<K, V> Tree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
         Tree {
             len: 0,
-            root: Root::new(Noop::new()),
+            root: Root::default(),
         }
     }
 }

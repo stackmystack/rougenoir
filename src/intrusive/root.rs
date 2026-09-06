@@ -695,7 +695,7 @@ mod test {
 
     #[test]
     fn insert_then_iterate_in_order() {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         let entries: Vec<_> = [5, 1, 9, 3, 7, 1, 0, -4]
             .into_iter()
             .map(|k| insert(&mut root, k))
@@ -715,10 +715,10 @@ mod test {
 
     #[quickcheck]
     fn insertion_order_is_irrelevant(xs: Vec<i16>) -> bool {
-        let mut forward = IntRoot::new(Noop::new());
+        let mut forward = IntRoot::default();
         let forward_entries: Vec<_> = xs.iter().map(|&k| insert(&mut forward, k)).collect();
 
-        let mut backward = IntRoot::new(Noop::new());
+        let mut backward = IntRoot::default();
         let backward_entries: Vec<_> = xs.iter().rev().map(|&k| insert(&mut backward, k)).collect();
 
         let mut expected = xs;
@@ -743,7 +743,7 @@ mod test {
 
     #[quickcheck]
     fn remove_arbitrary(xs: Vec<i16>) -> bool {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         let entries: Vec<_> = xs.iter().map(|&k| insert(&mut root, k)).collect();
 
         let (removed, kept): (Vec<_>, Vec<_>) = entries

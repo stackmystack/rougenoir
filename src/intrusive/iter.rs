@@ -154,7 +154,7 @@ mod test {
 
     #[test]
     fn empty_tree_yields_nothing() {
-        let root = IntRoot::new(Noop::new());
+        let root = IntRoot::default();
         // SAFETY: root is empty, so vacuously every (zero) reachable link
         // points at a live IntEntry.
         let mut iter = unsafe { RawIter::<IntEntryAdapter>::new(root.node, 0) };
@@ -164,7 +164,7 @@ mod test {
 
     #[test]
     fn walks_forward_in_order() {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         let keys = [5, 1, 9, 3, 7];
         let entries: Vec<_> = keys.iter().map(|&k| insert(&mut root, k)).collect();
 
@@ -181,7 +181,7 @@ mod test {
 
     #[test]
     fn walks_backward_in_reverse_order() {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         let keys = [5, 1, 9, 3, 7];
         let entries: Vec<_> = keys.iter().map(|&k| insert(&mut root, k)).collect();
 
@@ -196,7 +196,7 @@ mod test {
 
     #[test]
     fn next_and_next_back_meet_in_the_middle_without_overrunning() {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         let keys: Vec<i16> = (0..10).collect();
         let entries: Vec<_> = keys.iter().map(|&k| insert(&mut root, k)).collect();
 
@@ -216,7 +216,7 @@ mod test {
 
     #[quickcheck]
     fn matches_forward_and_backward_reference_order(xs: Vec<i16>) -> bool {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         // `xs` may contain duplicate keys; insert_by rejects (and doesn't
         // link) a key that already compares equal, so free those instead of
         // treating them as newly-linked entries.

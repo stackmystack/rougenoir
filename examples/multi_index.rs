@@ -41,8 +41,8 @@ struct EmployeeStore {
 impl EmployeeStore {
     fn new() -> Self {
         EmployeeStore {
-            by_id: Root::new(Noop::new()),
-            by_name: Root::new(Noop::new()),
+            by_id: Root::default(),
+            by_name: Root::default(),
             len: 0,
         }
     }

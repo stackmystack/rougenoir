@@ -12,7 +12,7 @@ impl<K, V> CachedTree<K, V, Noop<K, V>> {
         CachedTree {
             leftmost: None,
             len: 0,
-            root: Root::new(Noop::new()),
+            root: Root::default(),
         }
     }
 }

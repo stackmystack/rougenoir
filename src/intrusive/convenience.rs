@@ -270,7 +270,7 @@ mod test {
 
     #[test]
     fn insert_by_finds_the_right_spot_and_find_by_locates_it() {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         let entries: Vec<_> = [5, 1, 9, 3, 7]
             .into_iter()
             .map(|key| {
@@ -302,7 +302,7 @@ mod test {
 
     #[test]
     fn insert_by_reports_an_existing_node_instead_of_double_inserting() {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         let first = leak(1);
         // SAFETY: first is freshly leaked and unlinked.
         let inserted =
@@ -329,7 +329,7 @@ mod test {
 
     #[quickcheck]
     fn insertion_order_is_irrelevant(xs: Vec<i16>) -> bool {
-        let mut forward = IntRoot::new(Noop::new());
+        let mut forward = IntRoot::default();
         let forward_entries: Vec<_> = xs
             .iter()
             .filter_map(|&key| {
@@ -365,7 +365,7 @@ mod test {
 
     #[test]
     fn for_each_postorder_visits_every_node_exactly_once() {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         let keys = [5, 1, 9, 3, 7, 0, -2];
         let entries: Vec<_> = keys
             .iter()
@@ -398,7 +398,7 @@ mod test {
 
     #[test]
     fn for_each_postorder_can_free_every_node() {
-        let mut root = IntRoot::new(Noop::new());
+        let mut root = IntRoot::default();
         for key in 0..50i16 {
             let entry = leak(key);
             // SAFETY: entry is freshly leaked and unlinked; root's links
