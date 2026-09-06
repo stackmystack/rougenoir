@@ -1,6 +1,6 @@
-use std::{marker::PhantomData, ptr::NonNull};
+use std::{cmp::Ordering, marker::PhantomData, ptr::NonNull};
 
-use crate::intrusive;
+use crate::{ComingFrom, intrusive};
 
 use super::{Node, NodeAdapter, NodePtr, Root, TreeCallbacks};
 
@@ -70,6 +70,58 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Root<K, V, C> {
         ));
         inner.node = self.node.map(Node::link_ptr);
         inner.insert(Node::link_ptr(node));
+        self.node = inner.node.map(Node::from_link);
+    }
+
+    /// Finds where a node comparing via `cmp` belongs (descending as
+    /// [`intrusive::find_insert_position`] does), without linking anything.
+    /// This is the shared implementation behind
+    /// `Tree::insert`/`CachedTree::insert`.
+    ///
+    /// `cmp` must not read through the node you're about to insert. It doesn't
+    /// exist as far as this tree is concerned yet, and combining "compare
+    /// against the new node's own key" with linking it in the same step is
+    /// exactly the unsound pattern documented on
+    /// [`intrusive::find_insert_position`]. Compare against the key you're
+    /// about to move into that node instead, then pass what this returns to
+    /// [`Root::link_vacant`].
+    ///
+    /// # Safety
+    ///
+    /// Every link reachable from `self.node` must point at a live
+    /// `Node<K, V>`.
+    pub unsafe fn find_insert_position(
+        &self,
+        cmp: impl FnMut(&Node<K, V>) -> Ordering,
+    ) -> intrusive::InsertPosition<Node<K, V>> {
+        // SAFETY: delegated to the caller.
+        unsafe {
+            intrusive::find_insert_position::<NodeAdapter<K, V>>(self.node.map(Node::link_ptr), cmp)
+        }
+    }
+
+    /// Links `node` at the `Vacant` position [`Root::find_insert_position`]
+    /// reported, and rebalances.
+    ///
+    /// # Safety
+    ///
+    /// `node` must point at a live, currently unlinked `Node<K, V>` (fresh
+    /// from [`Node::leak`], not already part of any tree). `parent`, if
+    /// any, must be a live `Node<K, V>` already in this tree — i.e. exactly
+    /// what `find_insert_position` just returned.
+    pub unsafe fn link_vacant(
+        &mut self,
+        node: NonNull<Node<K, V>>,
+        parent: Option<NonNull<Node<K, V>>>,
+        direction: ComingFrom,
+    ) {
+        let mut inner = intrusive::Root::<NodeAdapter<K, V>, _>::new(CallbackBridge(
+            &self.callbacks,
+            PhantomData,
+        ));
+        inner.node = self.node.map(Node::link_ptr);
+        // SAFETY: delegated to the caller.
+        unsafe { intrusive::link_at(&mut inner, node, parent, direction) };
         self.node = inner.node.map(Node::from_link);
     }
 }

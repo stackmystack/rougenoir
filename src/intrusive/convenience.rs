@@ -42,6 +42,17 @@ pub enum InsertPosition<V> {
 /// `Ordering::Less` means "my key is less than `candidate`'s", and descends
 /// left.
 ///
+/// `cmp` must not read through a pointer/reference into the value you are
+/// about to insert (e.g. `unsafe { &about_to_insert.as_ref().key }`
+/// captured into the closure), even though that value isn't linked into the
+/// tree yet and looks unrelated to `root`. If you go on to link that value
+/// in via [`link_at`]/[`insert_by`], rebalancing may rotate it, mutating it
+/// through a raw pointer while `cmp`'s captured reference is, from the
+/// Stacked Borrows model's point of view, still a live, protected argument
+/// of the enclosing call.
+/// Compare against data that lives independently of the value being
+/// inserted (e.g. the key parameter you're about to move into it) instead.
+///
 /// # Safety
 ///
 /// Every link reachable from `root` must point at a live `A::Value`.
@@ -85,18 +96,67 @@ pub unsafe fn find_insert_position<A: Adapter>(
     }
 }
 
-/// Links `value` into `root` at the position `cmp` dictates (see
-/// [`find_insert_position`]), and rebalances.
+/// Links `value` at the `Vacant` position [`find_insert_position`] reported
+/// (`parent`/`direction`, exactly as returned), and rebalances.
 ///
-/// If an existing node compares equal, `value` is *not* linked in — the
-/// caller decides whether to replace, merge into, or reject it — and that
-/// existing node is returned instead.
+/// Splitting this out of [`insert_by`] is what lets a caller whose
+/// comparison needs to read the value being inserted's own key do so
+/// *safely*: call [`find_insert_position`] with a comparator that reads the
+/// key from somewhere independent of `value` (e.g. the key parameter,
+/// before it's moved into `value`), construct/leak `value` only once you
+/// know where it goes, then call `link_at`. See the safety note on
+/// [`find_insert_position`] for why combining those two steps into one
+/// comparator closure over `value` itself is unsound.
 ///
 /// # Safety
 ///
 /// `value` must point at a live, currently unlinked `A::Value` (fresh from
 /// construction, not already part of any tree through this `Adapter`).
-/// Every link reachable from `root.node` must point at a live `A::Value`.
+/// `parent`, if any, must be a live `A::Value` already linked into `root`.
+pub unsafe fn link_at<A: Adapter, C: TreeCallbacks<Value = A::Value>>(
+    root: &mut Root<A, C>,
+    value: NonNull<A::Value>,
+    parent: Option<NonNull<A::Value>>,
+    direction: ComingFrom,
+) {
+    match parent {
+        None => {
+            // SAFETY: value is freshly unlinked, per the caller's contract;
+            // a lone root must be black.
+            unsafe { A::set_color(value, Color::Black) };
+            // SAFETY: value embeds a live Link.
+            root.node = Some(unsafe { A::get_link(value) });
+        }
+        Some(parent) => {
+            // SAFETY: value is freshly unlinked, per the caller's contract;
+            // parent is a live A::Value belonging to this tree.
+            unsafe {
+                Link::link(A::get_link(value), A::get_link(parent), direction);
+                root.insert(A::get_link(value));
+            }
+        }
+    }
+}
+
+/// Links `value` into `root` at the position `cmp` dictates (see
+/// [`find_insert_position`]), and rebalances.
+///
+/// If an existing node compares equal, `value` is *not* linked in and that
+/// existing node is returned instead. The caller decides whether to replace,
+/// merge into, or reject it.
+///
+/// # Safety
+///
+/// `value` must point at a live, currently unlinked `A::Value` (fresh from
+/// construction, not already part of any tree through this `Adapter`). Every
+/// link reachable from `root.node` must point at a live `A::Value`.
+///
+/// `cmp` is bound by the same restriction documented on
+/// [`find_insert_position`]. In particular, it must not read `value` itself,
+/// which rules out the most obvious way to write this comparator for a plain
+/// by-key insert. When that's what you need, call [`find_insert_position`]
+/// (comparing against the key you're about to move into `value`) and
+/// [`link_at`] directly instead of this function.
 pub unsafe fn insert_by<A: Adapter, C: TreeCallbacks<Value = A::Value>>(
     root: &mut Root<A, C>,
     value: NonNull<A::Value>,
@@ -105,27 +165,9 @@ pub unsafe fn insert_by<A: Adapter, C: TreeCallbacks<Value = A::Value>>(
     // SAFETY: delegated to the caller.
     match unsafe { find_insert_position::<A>(root.node, cmp) } {
         InsertPosition::Occupied(existing) => Some(existing),
-        InsertPosition::Vacant {
-            parent: None,
-            direction: _,
-        } => {
-            // SAFETY: value is freshly unlinked, per the caller's contract;
-            // a lone root must be black.
-            unsafe { A::set_color(value, Color::Black) };
-            // SAFETY: value embeds a live Link.
-            root.node = Some(unsafe { A::get_link(value) });
-            None
-        }
-        InsertPosition::Vacant {
-            parent: Some(parent),
-            direction,
-        } => {
-            // SAFETY: value is freshly unlinked, per the caller's contract;
-            // parent is a live A::Value belonging to this tree.
-            unsafe {
-                Link::link(A::get_link(value), A::get_link(parent), direction);
-                root.insert(A::get_link(value));
-            }
+        InsertPosition::Vacant { parent, direction } => {
+            // SAFETY: delegated to the caller.
+            unsafe { link_at(root, value, parent, direction) };
             None
         }
     }

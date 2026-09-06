@@ -17,7 +17,7 @@ mod root;
 pub use adapter::Adapter;
 pub use callbacks::{Noop, TreeCallbacks};
 pub use convenience::{
-    InsertPosition, find_by, find_insert_position, for_each_postorder, insert_by,
+    InsertPosition, find_by, find_insert_position, for_each_postorder, insert_by, link_at,
 };
 pub use iter::RawIter;
 pub use link::Link;

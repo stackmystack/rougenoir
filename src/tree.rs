@@ -6,7 +6,7 @@ use std::{
     ptr::NonNull,
 };
 
-use crate::{ComingFrom, Node, NodePtr, NodePtrExt, Noop, ParentColor, Root, Tree, TreeCallbacks};
+use crate::{ComingFrom, Node, NodePtr, Noop, ParentColor, Root, Tree, TreeCallbacks, intrusive};
 
 impl<K, V> Tree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -85,59 +85,28 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> Tree<K, V, C> {
     where
         K: Ord,
     {
-        match self.root.node {
-            None => {
-                // SAFETY: root doesn't exist, so we create a new one.
-                self.root.node = unsafe { Node::<K, V>::leak(key, value) };
-                self.len += 1;
-                None
+        // SAFETY: every link reachable from self.root.node points at a live
+        // Node<K, V>. `key` here is a plain local, independent of any tree
+        // node's memory. The safe way to compare (see the safety note on
+        // `intrusive::find_insert_position`): the node doesn't exist yet,
+        // so nothing can alias it.
+        match unsafe {
+            self.root
+                .find_insert_position(|candidate| key.cmp(&candidate.key))
+        } {
+            intrusive::InsertPosition::Occupied(mut existing) => {
+                // SAFETY: existing points at a live Node<K, V> in this tree.
+                Some(std::mem::replace(
+                    &mut unsafe { existing.as_mut() }.value,
+                    value,
+                ))
             }
-            Some(_) => {
-                // [1] replace an existing value or ([2] prepare for linking and [3] link).
-                let mut current_node = self.root.node.ptr();
-                let mut parent = current_node;
-                let mut direction = ComingFrom::Left; // We don't really care, but rust does.
-                while !current_node.is_null() {
-                    parent = current_node; // [4] parent is never null by construction.
-                    #[allow(unused_variables)]
-                    let parent = parent; // [4] by sealing, parent is never null hereafter.
-
-                    // SAFETY: guaranteed not null by the while guard.
-                    let current_ref = unsafe {
-                        current_node
-                            .as_mut()
-                            .expect("current_node pointer should be valid")
-                    };
-                    match key.cmp(&current_ref.key) {
-                        Equal => {
-                            // [1] replace an existing value.
-                            return Some(std::mem::replace(&mut current_ref.value, value));
-                        }
-                        Greater => {
-                            // [2] prepare for linking on the right of parent.
-                            direction = ComingFrom::Right;
-                            current_node = current_ref.right().ptr();
-                        }
-                        Less => {
-                            // [2] prepare for linking on the left of parent.
-                            direction = ComingFrom::Left;
-                            current_node = current_ref.left().ptr();
-                        }
-                    };
-                }
-                #[allow(unused_variables)]
-                let current_node = current_node;
-                let direction = direction;
-                let parent = parent; // [4] by sealing, parent is never null hereafter.
-
-                // [3] link.
-
-                // SAFETY: we're owning (k,v)
-                let mut node = unsafe { Node::<K, V>::leak(key, value) };
-                // SAFETY: [4] parent is never null by construction.
-                unsafe { node.link(parent, direction) };
-                // SAFETY: node is definitely non null at this stage.
-                self.root.insert(unsafe { node.unwrap_unchecked() });
+            intrusive::InsertPosition::Vacant { parent, direction } => {
+                // SAFETY: Box::into_raw of a fresh allocation is never null.
+                let node = unsafe { Node::<K, V>::leak(key, value) }.expect("freshly leaked node");
+                // SAFETY: node is freshly leaked and unlinked; parent, if
+                // any, is exactly what find_insert_position just returned.
+                unsafe { self.root.link_vacant(node, parent, direction) };
                 self.len += 1;
                 None
             }

@@ -108,7 +108,7 @@ mod test {
     use quickcheck_macros::quickcheck;
 
     use super::*;
-    use crate::{ComingFrom, intrusive::Noop, intrusive::Root, intrusive_adapter};
+    use crate::{intrusive::Noop, intrusive::Root, intrusive::insert_by, intrusive_adapter};
 
     struct IntEntry {
         link: Link,
@@ -133,48 +133,13 @@ mod test {
         unsafe { Box::from_raw(entry.as_ptr()) }
     }
 
+    /// Inserts `key`, assumed distinct from every key already in `root`.
     fn insert(root: &mut IntRoot, key: i16) -> NonNull<IntEntry> {
         let entry = leak(key);
-        // SAFETY: entry was just leaked; it is live and unaliased.
-        let link = unsafe { IntEntryAdapter::get_link(entry) };
-        match root.node {
-            None => {
-                // SAFETY: link is live and not yet part of any tree.
-                unsafe { Link::set_color(link, crate::Color::Black) };
-                root.node = Some(link);
-            }
-            Some(mut current) => {
-                let parent;
-                let direction;
-                loop {
-                    let candidate_parent = current;
-                    // SAFETY: current is a live link belonging to this tree.
-                    let current_value = unsafe { IntEntryAdapter::get_value(current) };
-                    // SAFETY: current_value points at a live IntEntry.
-                    let candidate_direction = if key < unsafe { current_value.as_ref() }.key {
-                        ComingFrom::Left
-                    } else {
-                        ComingFrom::Right
-                    };
-                    let next = match candidate_direction {
-                        ComingFrom::Left => Some(current).left(),
-                        ComingFrom::Right => Some(current).right(),
-                    };
-                    match next {
-                        Some(n) => current = n,
-                        None => {
-                            parent = candidate_parent;
-                            direction = candidate_direction;
-                            break;
-                        }
-                    }
-                }
-                // SAFETY: link is freshly leaked and unlinked; parent is a
-                // live link belonging to this tree.
-                unsafe { Link::link(link, parent, direction) };
-                root.insert(link);
-            }
-        }
+        // SAFETY: entry is freshly leaked and unlinked; root's links all
+        // point at live IntEntries.
+        let existing = unsafe { insert_by::<IntEntryAdapter, _>(root, entry, |c| key.cmp(&c.key)) };
+        assert!(existing.is_none(), "test helper only inserts distinct keys");
         entry
     }
 
@@ -250,10 +215,31 @@ mod test {
     #[quickcheck]
     fn matches_forward_and_backward_reference_order(xs: Vec<i16>) -> bool {
         let mut root = IntRoot::new(Noop::new());
-        let entries: Vec<_> = xs.iter().map(|&k| insert(&mut root, k)).collect();
+        // `xs` may contain duplicate keys; insert_by rejects (and doesn't
+        // link) a key that already compares equal, so free those instead of
+        // treating them as newly-linked entries.
+        let entries: Vec<_> = xs
+            .iter()
+            .filter_map(|&key| {
+                let entry = leak(key);
+                // SAFETY: entry is freshly leaked and unlinked; root's links
+                // all point at live IntEntries.
+                let existing = unsafe {
+                    insert_by::<IntEntryAdapter, _>(&mut root, entry, |c| key.cmp(&c.key))
+                };
+                if existing.is_some() {
+                    // SAFETY: entry was never linked in.
+                    drop(unsafe { unleak(entry) });
+                    None
+                } else {
+                    Some(entry)
+                }
+            })
+            .collect();
 
         let mut expected = xs;
         expected.sort();
+        expected.dedup();
 
         // SAFETY: root's links all point at the live IntEntries just
         // inserted, and there are exactly `entries.len()` of them.

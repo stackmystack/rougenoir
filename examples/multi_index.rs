@@ -11,7 +11,8 @@
 use std::ptr::NonNull;
 
 use rougenoir::intrusive::{
-    Adapter, Link, Noop, RawIter, Root, find_by, for_each_postorder, insert_by,
+    Adapter, InsertPosition, Link, Noop, RawIter, Root, find_by, find_insert_position,
+    for_each_postorder, insert_by, link_at,
 };
 use rougenoir::intrusive_adapter;
 
@@ -49,25 +50,45 @@ impl EmployeeStore {
     /// Inserts a new employee, linking the same allocation into both trees.
     ///
     /// Both indices are simple key comparisons with no per-node work
-    /// needed during descent, so `intrusive::insert_by` covers this
-    /// completely: no manual descent loop, no first-node special case.
+    /// needed during descent, so `intrusive`'s convenience layer covers
+    /// this completely: no manual descent loop, no first-node special case.
     ///
-    /// See `examples/interval_tree.rs` for a tree that instead walks by hand,
-    /// because it needs more than a read-only comparison
+    /// `by_id`'s comparator can use `insert_by` directly: `id` is a plain
+    /// `u32`, independent of `node`'s memory. `by_name`'s comparator needs
+    /// `name`, which *is* about to live inside `node` — comparing against a
+    /// reference borrowed from `node` itself (`&node.as_ref().name`) would
+    /// be unsound (see the safety note on `find_insert_position`): once
+    /// linked, `node` can be rotated by either tree's rebalancing while
+    /// that borrow is still considered live. So `by_name` finds its
+    /// position first, using the owned `name` before it's moved into
+    /// `node`, then links separately via `link_at`.
+    ///
+    /// See `examples/interval_tree.rs` for a tree that instead walks by
+    /// hand, because it needs more than a read-only comparison.
     fn insert(&mut self, id: u32, name: impl Into<String>) {
+        let name = name.into();
+
+        // SAFETY: every link reachable from by_name points at a live
+        // Employee.
+        let name_position = unsafe {
+            find_insert_position::<ByNameAdapter>(self.by_name.node, |c| name.cmp(&c.name))
+        };
+
         let node = NonNull::from(Box::leak(Box::new(Employee {
             by_id: Link::new(),
             by_name: Link::new(),
             id,
-            name: name.into(),
+            name,
         })));
 
         // SAFETY: node is freshly leaked and unlinked in either tree; every
-        // link reachable from by_id/by_name points at a live Employee.
+        // link reachable from by_id/by_name points at a live Employee;
+        // name_position was computed against this tree before node existed.
         unsafe {
             insert_by::<ByIdAdapter, _>(&mut self.by_id, node, |c| id.cmp(&c.id));
-            let name = &node.as_ref().name;
-            insert_by::<ByNameAdapter, _>(&mut self.by_name, node, |c| name.cmp(&c.name));
+            if let InsertPosition::Vacant { parent, direction } = name_position {
+                link_at(&mut self.by_name, node, parent, direction);
+            }
         }
         self.len += 1;
     }

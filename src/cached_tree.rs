@@ -5,10 +5,7 @@ use std::{
     ops::Index,
 };
 
-use crate::{
-    CachedTree, Color, ComingFrom, Node, NodePtr, NodePtrExt, Noop, ParentColor, Root,
-    TreeCallbacks,
-};
+use crate::{CachedTree, Color, Node, NodePtr, Noop, ParentColor, Root, TreeCallbacks, intrusive};
 
 impl<K, V> CachedTree<K, V, Noop<K, V>> {
     pub fn new() -> Self {
@@ -54,62 +51,40 @@ impl<K, V, C: TreeCallbacks<Key = K, Value = V>> CachedTree<K, V, C> {
     where
         K: Ord,
     {
-        match self.root.node {
-            None => {
-                // SAFETY: root doesn't exist, so we create a new one.
-                self.root.node = unsafe { Node::<K, V>::leak(key, value) };
-                self.len += 1;
-                self.leftmost = self.root.node;
-                None
+        // SAFETY: every link reachable from self.root.node points at a live
+        // Node<K, V>. `key` here is a plain local, independent of any tree
+        // node's memory. The safe way to compare (see the safety note on
+        // `intrusive::find_insert_position`): the node doesn't exist yet,
+        // so nothing can alias it.
+        match unsafe {
+            self.root
+                .find_insert_position(|candidate| key.cmp(&candidate.key))
+        } {
+            intrusive::InsertPosition::Occupied(mut existing) => {
+                // SAFETY: existing points at a live Node<K, V> in this tree.
+                // It was already the minimum or it wasn't; replacing its
+                // value in place doesn't change that.
+                Some(std::mem::replace(
+                    &mut unsafe { existing.as_mut() }.value,
+                    value,
+                ))
             }
-            Some(_) => {
-                // [1] replace an existing value or ([2] prepare for linking and [3] link)
-                let mut current_node = self.root.node.ptr();
-                let mut parent = current_node;
-                let mut direction = ComingFrom::Left; // We don't really care, but rust does.
-                while !current_node.is_null() {
-                    parent = current_node; // [4] by if guard, parent is never null.
-                    #[allow(unused_variables)]
-                    let parent = parent; // [4] by sealing, parent is never null hereafter.
-
-                    // SAFETY: guaranteed not null by the while guard.
-                    let current_ref = unsafe {
-                        current_node
-                            .as_mut()
-                            .expect("current_node pointer should be valid")
-                    };
-                    match key.cmp(&current_ref.key) {
-                        Equal => {
-                            // [1] replace an existing value.
-                            return Some(std::mem::replace(&mut current_ref.value, value));
-                        }
-                        Greater => {
-                            // [2] prepare for linking on the right of parent.
-                            direction = ComingFrom::Right;
-                            current_node = current_ref.right().ptr();
-                        }
-                        Less => {
-                            // [2] prepare for linking on the left of parent.
-                            direction = ComingFrom::Left;
-                            current_node = current_ref.left().ptr();
-                        }
-                    };
-                }
-                #[allow(unused_variables)]
-                let current_node = current_node;
-                let direction = direction;
-                let parent = parent; // [4] by sealing, parent is never null hereafter.
-
-                // [3] link.
-
-                // SAFETY: we're owning (k,v)
-                let mut node = unsafe { Node::<K, V>::leak(key, value) };
-                // SAFETY: [4] parent is never null by construction.
-                unsafe { node.link(parent, direction) };
-                self.root.insert(node.expect("can never be None"));
+            intrusive::InsertPosition::Vacant { parent, direction } => {
+                // SAFETY: Box::into_raw of a fresh allocation is never null.
+                let node = unsafe { Node::<K, V>::leak(key, value) }.expect("freshly leaked node");
+                // SAFETY: node is freshly leaked and unlinked; parent, if
+                // any, is exactly what find_insert_position just returned.
+                unsafe { self.root.link_vacant(node, parent, direction) };
                 self.len += 1;
-                if matches!(direction, ComingFrom::Left) {
-                    self.leftmost = node;
+                // The new node is the tree's new minimum exactly when it
+                // has no in-order predecessor, true unconditionally,
+                // unlike "it was linked as a Left child" (that only says
+                // it's its own parent's minimum, not the whole tree's: e.g.
+                // linking 6 under 10, itself the right child of root 5,
+                // is a Left link that isn't a new global minimum).
+                // SAFETY: node is now linked into this tree.
+                if unsafe { node.as_ref() }.prev().is_none() {
+                    self.leftmost = Some(node);
                 }
                 None
             }
@@ -664,6 +639,36 @@ mod test {
         assert_eq!(Some((&0, &zero)), tree.first_key_value());
         assert_eq!(Some(&hundo), tree.last());
         assert_eq!(Some((&100, &hundo)), tree.last_key_value());
+    }
+
+    // `direction == Left` at the end of `insert`'s descent means "the new
+    // node became its own parent's left child", not "the new node is the
+    // tree's new global minimum". Those coincide in `first_and_last` above
+    // (every left-link there also happens to be a new minimum) but not in
+    // general. Inserting 6 as the left child of 10 (which itself sits to
+    // the right of the root, 5) must not disturb the cached minimum, 1.
+    #[test]
+    fn insert_does_not_corrupt_leftmost_when_a_left_link_is_not_a_new_minimum() {
+        let mut tree: CachedTree<i32, (), Noop<i32, ()>> = CachedTree::new();
+        tree.insert(5, ());
+        tree.insert(10, ());
+        tree.insert(1, ());
+        tree.insert(6, ());
+
+        assert_eq!(Some((&1, &())), tree.first_key_value());
+    }
+
+    #[quickcheck]
+    fn leftmost_always_matches_the_smallest_inserted_key(xs: Vec<i16>) -> bool {
+        let mut tree: CachedTree<i16, (), Noop<i16, ()>> = CachedTree::new();
+        for &x in &xs {
+            tree.insert(x, ());
+        }
+
+        match xs.iter().min() {
+            None => tree.first_key_value().is_none(),
+            Some(min) => tree.first_key_value() == Some((min, &())),
+        }
     }
 
     #[test]
