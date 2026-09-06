@@ -6,7 +6,7 @@
 
 use std::{iter::FusedIterator, marker::PhantomData, ptr::NonNull};
 
-use crate::{NodePtr, NodePtrExt};
+use crate::NodePtr;
 
 use super::{Adapter, Link, first_of, last_of};
 
@@ -53,7 +53,8 @@ impl<A: Adapter> Iterator for RawIter<A> {
         }
         let link = self.first.expect("len > 0 implies first is Some");
         self.len -= 1;
-        self.first = Some(link).next_node();
+        // SAFETY: link points at a live Link, per `RawIter::new`'s contract.
+        self.first = unsafe { Link::next(link) };
         // SAFETY: link points at a live A::Value, per `RawIter::new`'s
         // contract.
         Some(unsafe { A::get_value(link) })
@@ -77,7 +78,8 @@ impl<A: Adapter> DoubleEndedIterator for RawIter<A> {
         }
         let link = self.last.expect("len > 0 implies last is Some");
         self.len -= 1;
-        self.last = Some(link).prev_node();
+        // SAFETY: link points at a live Link, per `RawIter::new`'s contract.
+        self.last = unsafe { Link::prev(link) };
         // SAFETY: link points at a live A::Value, per `RawIter::new`'s
         // contract.
         Some(unsafe { A::get_value(link) })

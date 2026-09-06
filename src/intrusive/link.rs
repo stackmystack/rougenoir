@@ -106,8 +106,10 @@ impl Link {
 
     // --- Structural operations, all raw-pointer based. ---
 
+    /// # Safety
+    /// `link` must be valid for reads.
     #[inline(always)]
-    pub(crate) unsafe fn is_red(link: NonNull<Link>) -> bool {
+    pub unsafe fn is_red(link: NonNull<Link>) -> bool {
         // SAFETY: delegated to the caller.
         unsafe { Self::read_parent_color(link) }.color() == Color::Red
     }
@@ -141,7 +143,7 @@ impl Link {
     /// # Safety
     /// `link` must be valid for reads, as must every link reachable from it.
     #[inline(always)]
-    pub(crate) unsafe fn next(link: NonNull<Link>) -> NodePtr<Link> {
+    pub unsafe fn next(link: NonNull<Link>) -> NodePtr<Link> {
         // SAFETY: delegated to the caller for the whole traversal below.
         unsafe {
             // If we have a right-hand child, go down and then left as far as
@@ -182,7 +184,7 @@ impl Link {
     /// # Safety
     /// `link` must be valid for reads.
     #[inline(always)]
-    pub(crate) unsafe fn parent(link: NonNull<Link>) -> NodePtr<Link> {
+    pub unsafe fn parent(link: NonNull<Link>) -> NodePtr<Link> {
         // SAFETY: delegated to the caller.
         NonNull::new(unsafe { Self::read_parent_color(link) }.parent())
     }
@@ -190,7 +192,7 @@ impl Link {
     /// # Safety
     /// `link` must be valid for reads, as must every link reachable from it.
     #[inline(always)]
-    pub(crate) unsafe fn prev(link: NonNull<Link>) -> NodePtr<Link> {
+    pub unsafe fn prev(link: NonNull<Link>) -> NodePtr<Link> {
         // SAFETY: delegated to the caller for the whole traversal below.
         unsafe {
             // If we have a left-hand child, go down and then right as far as
@@ -267,7 +269,7 @@ impl Link {
     /// # Safety
     /// `link` must be valid for reads.
     #[inline(always)]
-    pub(crate) unsafe fn left(link: NonNull<Link>) -> NodePtr<Link> {
+    pub unsafe fn left(link: NonNull<Link>) -> NodePtr<Link> {
         // SAFETY: delegated to the caller.
         unsafe { Self::read_left(link) }
     }
@@ -283,7 +285,7 @@ impl Link {
     /// # Safety
     /// `link` must be valid for reads.
     #[inline(always)]
-    pub(crate) unsafe fn right(link: NonNull<Link>) -> NodePtr<Link> {
+    pub unsafe fn right(link: NonNull<Link>) -> NodePtr<Link> {
         // SAFETY: delegated to the caller.
         unsafe { Self::read_right(link) }
     }

@@ -3,9 +3,9 @@ use std::{
     ptr::{self, NonNull},
 };
 
-use crate::{Color, NodePtr, NodePtrExt, NodePtrImplExt};
+use crate::{Color, NodePtr};
 
-use super::{Adapter, Link, TreeCallbacks};
+use super::{Adapter, Link, LinkPtrExt, LinkPtrMut, TreeCallbacks};
 
 /// The root of an intrusive red-black tree of `A::Value`s.
 ///
@@ -14,9 +14,10 @@ use super::{Adapter, Link, TreeCallbacks};
 /// into it, mirroring the Linux kernel's `struct rb_root`) and has no
 /// built-in notion of ordering.
 ///
-/// As with [`crate::Root`], the caller walks the tree themselves
-/// (via [`NodePtrExt`]/[`Link`]'s methods) to find where a new node belongs,
-/// links it in with [`Link::link`], and then calls [`Root::insert`] to rebalance.
+/// As with [`crate::Root`], the caller walks the tree themselves (via
+/// [`Link`]'s own methods, e.g. [`Link::left`]/[`Link::right`]) to find
+/// where a new node belongs, links it in with [`Link::link`], and then
+/// calls [`Root::insert`] to rebalance.
 pub struct Root<A: Adapter, C> {
     pub callbacks: C,
     pub node: NodePtr<Link>,
@@ -71,7 +72,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
             }
 
             gparent = parent.red_parent();
-            tmp = gparent.right();
+            tmp = gparent.right_node();
 
             if parent != tmp {
                 // parent == gparent->rb_left
@@ -89,12 +90,12 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     tmp.set_parent_and_color(gparent.ptr(), Color::Black);
                     parent.set_parent_and_color(gparent.ptr(), Color::Black);
                     node = gparent;
-                    parent = node.parent();
+                    parent = node.parent_node();
                     node.set_parent_and_color(parent.ptr(), Color::Red);
                     continue;
                 }
 
-                tmp = parent.right();
+                tmp = parent.right_node();
                 if node == tmp {
                     // Case 2 - node's uncle is black and node is the parent's
                     // right child (left rotate at parent).
@@ -107,7 +108,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     //
                     // This still leaves us in violation of 4), the continuation
                     // into Case 3 will fix that.
-                    tmp = node.left();
+                    tmp = node.left_node();
                     parent.set_right(tmp);
                     node.set_left(parent);
                     if tmp.is_some() {
@@ -117,7 +118,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     self.callbacks
                         .rotate(Self::value(parent), Self::value(node));
                     parent = node;
-                    tmp = node.right();
+                    tmp = node.right_node();
                 }
 
                 // Case 3 - node's uncle is black and node is
@@ -138,21 +139,21 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     .rotate(Self::value(gparent), Self::value(parent));
                 break;
             } else {
-                tmp = gparent.left();
+                tmp = gparent.left_node();
                 if tmp.is_red() {
                     // Case 1 - color flips
                     tmp.set_parent_and_color(gparent.ptr(), Color::Black);
                     parent.set_parent_and_color(gparent.ptr(), Color::Black);
                     node = gparent;
-                    parent = node.parent();
+                    parent = node.parent_node();
                     node.set_parent_and_color(parent.ptr(), Color::Red);
                     continue;
                 }
 
-                tmp = parent.left();
+                tmp = parent.left_node();
                 if node == tmp {
                     // Case 2 - right rotate at parent
-                    tmp = node.right();
+                    tmp = node.right_node();
                     parent.set_left(tmp);
                     node.set_right(parent);
                     if tmp.is_some() {
@@ -162,7 +163,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     self.callbacks
                         .rotate(Self::value(parent), Self::value(node));
                     parent = node;
-                    tmp = node.left();
+                    tmp = node.left_node();
                 }
 
                 // Case 3 - left rotate at gparent
@@ -189,7 +190,8 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
 pub(crate) fn first_of(node: NodePtr<Link>) -> NodePtr<Link> {
     let mut n = node?;
     // n can never be null here, by construction.
-    while let Some(left) = Some(n).left() {
+    // SAFETY: every link reachable from n is live, per the caller's contract.
+    while let Some(left) = unsafe { Link::left(n) } {
         n = left;
     }
     Some(n)
@@ -200,7 +202,8 @@ pub(crate) fn first_of(node: NodePtr<Link>) -> NodePtr<Link> {
 pub(crate) fn last_of(node: NodePtr<Link>) -> NodePtr<Link> {
     let mut n = node?;
     // n is never null here, via the `?` above.
-    while let Some(right) = Some(n).right() {
+    // SAFETY: every link reachable from n is live, per the caller's contract.
+    while let Some(right) = unsafe { Link::right(n) } {
         n = right;
     }
     Some(n)
@@ -219,18 +222,20 @@ pub(crate) fn validate_of(node: NodePtr<Link>) -> bool {
             res = false;
             break;
         }
-        let left = Some(c).left();
-        let right = Some(c).right();
-        if left.is_some() && left.parent() != current {
+        // SAFETY: every link reachable from c is live, per the caller's
+        // contract.
+        let (left, right) = unsafe { (Link::left(c), Link::right(c)) };
+        if left.is_some() && left.parent_node() != current {
             res = false;
         }
-        if right.is_some() && right.parent() != current {
+        if right.is_some() && right.parent_node() != current {
             res = false;
         }
         if !res {
             return false;
         }
-        current = Some(c).next_node();
+        // SAFETY: see above.
+        current = unsafe { Link::next(c) };
     }
 
     res
@@ -273,8 +278,10 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
 
     #[inline]
     fn erase_augmented(&mut self, node: NonNull<Link>) -> NodePtr<Link> {
-        let mut child = Some(node).right();
-        let mut tmp = Some(node).left();
+        // SAFETY: node points at a live Link that is part of this tree.
+        let mut child = unsafe { Link::right(node) };
+        // SAFETY: see above.
+        let mut tmp = unsafe { Link::left(node) };
         let mut parent;
         let rebalance;
         let pc;
@@ -311,7 +318,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
             let mut successor = child;
             let mut child2;
 
-            tmp = child.left();
+            tmp = child.left_node();
             if tmp.is_none() {
                 // Case 2: node's successor is its right child
                 //
@@ -321,7 +328,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                 //        \
                 //        (c)
                 parent = successor;
-                child2 = successor.right();
+                child2 = successor.right_node();
                 self.callbacks
                     .copy(Self::value(Some(node)), Self::value(successor));
             } else {
@@ -340,12 +347,12 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                 loop {
                     parent = successor;
                     successor = tmp;
-                    tmp = tmp.left();
+                    tmp = tmp.left_node();
                     if tmp.is_none() {
                         break;
                     }
                 }
-                child2 = successor.right();
+                child2 = successor.right_node();
                 parent.set_left(child2);
                 successor.set_right(child);
                 child.set_parent(successor.ptr());
@@ -356,7 +363,8 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     .propagate(Self::value_opt(parent), Self::value_opt(successor));
             }
 
-            tmp = Some(node).left();
+            // SAFETY: node points at a live Link that is part of this tree.
+            tmp = unsafe { Link::left(node) };
             successor.set_left(tmp);
             tmp.set_parent(successor.ptr());
 
@@ -395,7 +403,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
             // - node is not the root (parent is not NULL)
             // - All leaf paths going through parent and node have a
             //   black node count that is 1 lower than other leaf paths.
-            sibling = parent.right();
+            sibling = parent.right_node();
             if node != sibling {
                 if sibling.is_red() {
                     // Case 1 - left rotate at parent
@@ -405,7 +413,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     //   N   s    -->    p   Sr
                     //      / \         / \
                     //     Sl  Sr      N   Sl
-                    tmp1 = sibling.left();
+                    tmp1 = sibling.left_node();
                     parent.set_right(tmp1);
                     sibling.set_left(parent);
                     tmp1.set_parent_and_color(parent.ptr(), Color::Black);
@@ -414,9 +422,9 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                         .rotate(Self::value(parent), Self::value(sibling));
                     sibling = tmp1;
                 }
-                tmp1 = sibling.right();
+                tmp1 = sibling.right_node();
                 if tmp1.is_black() {
-                    tmp2 = sibling.left();
+                    tmp2 = sibling.left_node();
                     if tmp2.is_black() {
                         // Case 2 - sibling color flip
                         // (p could be either color here)
@@ -435,7 +443,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                             parent.set_color(Color::Black);
                         } else {
                             node = parent;
-                            parent = parent.parent();
+                            parent = parent.parent_node();
                             if parent.is_some() {
                                 continue;
                             }
@@ -466,7 +474,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     //        S      N        sr
                     //         \
                     //          sr
-                    tmp1 = tmp2.right();
+                    tmp1 = tmp2.right_node();
                     sibling.set_left(tmp1);
                     tmp2.set_right(sibling);
                     parent.set_right(tmp2);
@@ -487,7 +495,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                 //     N   S     -->   P   Sr
                 //        / \         / \
                 //      (sl) sr      N  (sl)
-                tmp2 = sibling.left();
+                tmp2 = sibling.left_node();
                 parent.set_right(tmp2);
                 sibling.set_left(parent);
                 tmp1.set_parent_and_color(sibling.ptr(), Color::Black);
@@ -499,10 +507,10 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     .rotate(Self::value(parent), Self::value(sibling));
                 break;
             } else {
-                sibling = parent.left();
+                sibling = parent.left_node();
                 if sibling.is_red() {
                     // Case 1 - right rotate at parent
-                    tmp1 = sibling.right();
+                    tmp1 = sibling.right_node();
                     parent.set_left(tmp1);
                     sibling.set_right(parent);
                     tmp1.set_parent_and_color(parent.ptr(), Color::Black);
@@ -511,9 +519,9 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                         .rotate(Self::value(parent), Self::value(sibling));
                     sibling = tmp1;
                 }
-                tmp1 = sibling.left();
+                tmp1 = sibling.left_node();
                 if tmp1.is_black() {
-                    tmp2 = sibling.right();
+                    tmp2 = sibling.right_node();
                     if tmp2.is_black() {
                         // Case 2 - sibling color flip
                         sibling.set_parent_and_color(parent.ptr(), Color::Red);
@@ -521,7 +529,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                             parent.set_color(Color::Black);
                         } else {
                             node = parent;
-                            parent = node.parent();
+                            parent = node.parent_node();
                             if parent.is_some() {
                                 continue;
                             }
@@ -529,7 +537,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                         break;
                     }
                     // Case 3 - left rotate at sibling
-                    tmp1 = tmp2.left();
+                    tmp1 = tmp2.left_node();
                     sibling.set_right(tmp1);
                     tmp2.set_left(sibling);
                     parent.set_left(tmp2);
@@ -542,7 +550,7 @@ impl<A: Adapter, C: TreeCallbacks<Value = A::Value>> Root<A, C> {
                     sibling = tmp2;
                 }
                 // Case 4 - right rotate at parent + color flips
-                tmp2 = sibling.right();
+                tmp2 = sibling.right_node();
                 parent.set_left(tmp2);
                 sibling.set_right(parent);
                 tmp1.set_parent_and_color(sibling.ptr(), Color::Black);
@@ -563,7 +571,7 @@ impl<A: Adapter, C> Root<A, C> {
         if parent.is_some() {
             // parent is never null here, by the if guard.
             let mut parent = parent;
-            if parent.left() == Some(old) {
+            if parent.left_node() == Some(old) {
                 parent.set_left(new);
             } else {
                 parent.set_right(new);
@@ -579,7 +587,7 @@ impl<A: Adapter, C> Root<A, C> {
     #[inline]
     fn rotate_set_parents(&mut self, mut old: NodePtr<Link>, new: NodePtr<Link>, color: Color) {
         if let Some(old_ptr) = old {
-            let parent = old.parent();
+            let parent = old.parent_node();
             // SAFETY: old_ptr points at a live Link that is part of this tree.
             let old_parent_color = unsafe { Link::parent_color(old_ptr) };
             let new_ptr = new.expect("new pointer should be valid");
@@ -647,9 +655,11 @@ mod test {
                     } else {
                         ComingFrom::Right
                     };
+                    // SAFETY: current points at a live Link belonging to
+                    // this tree.
                     let next = match candidate_direction {
-                        ComingFrom::Left => Some(current).left(),
-                        ComingFrom::Right => Some(current).right(),
+                        ComingFrom::Left => unsafe { Link::left(current) },
+                        ComingFrom::Right => unsafe { Link::right(current) },
                     };
                     match next {
                         Some(n) => current = n,
@@ -677,7 +687,8 @@ mod test {
             let value = unsafe { IntEntryAdapter::get_value(link) };
             // SAFETY: value points at a live IntEntry.
             keys.push(unsafe { value.as_ref() }.key);
-            current = Some(link).next_node();
+            // SAFETY: link points at a live Link.
+            current = unsafe { Link::next(link) };
         }
         keys
     }

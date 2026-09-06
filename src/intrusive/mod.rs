@@ -21,6 +21,7 @@ pub use convenience::{
 };
 pub use iter::RawIter;
 pub use link::Link;
+pub(crate) use node_ptr::{LinkPtrExt, LinkPtrMut};
 pub use root::Root;
 #[cfg(debug_assertions)]
 pub(crate) use root::validate_of;

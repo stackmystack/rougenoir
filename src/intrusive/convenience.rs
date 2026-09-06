@@ -230,7 +230,6 @@ mod test {
     use quickcheck_macros::quickcheck;
 
     use super::*;
-    use crate::NodePtrExt;
     use crate::intrusive::{Noop, first_of, validate_of};
     use crate::intrusive_adapter;
 
@@ -263,7 +262,8 @@ mod test {
             let value = unsafe { IntEntryAdapter::get_value(link) };
             // SAFETY: value points at a live IntEntry.
             keys.push(unsafe { value.as_ref() }.key);
-            current = Some(link).next_node();
+            // SAFETY: link points at a live Link.
+            current = unsafe { Link::next(link) };
         }
         keys
     }
